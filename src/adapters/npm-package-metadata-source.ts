@@ -56,6 +56,7 @@ export class NpmPackageMetadataSource implements PackageMetadataSource {
       publish_events_last_30_days: publishEventsLast30Days,
       weekly_downloads: weeklyDownloads,
       has_advisories: false,
+      dependents_count: null,
     }
   }
 

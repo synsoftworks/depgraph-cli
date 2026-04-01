@@ -33,6 +33,7 @@ function createMetadata(
     publish_events_last_30_days: 1,
     weekly_downloads: 5000,
     has_advisories: false,
+    dependents_count: null,
   }
 }
 

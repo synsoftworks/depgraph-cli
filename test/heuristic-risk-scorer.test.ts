@@ -20,6 +20,7 @@ function createMetadata(overrides: Partial<PackageMetadata> = {}): PackageMetada
     publish_events_last_30_days: 4,
     weekly_downloads: 50,
     has_advisories: false,
+    dependents_count: null,
     ...overrides,
   }
 }
@@ -52,4 +53,29 @@ test('heuristic scorer is deterministic for the same metadata', () => {
   assert.deepEqual(first, second)
   assert.equal(first.risk_level, 'critical')
   assert.ok(first.signals.length >= 4)
+})
+
+test('heuristic scorer flags zero-download injection pattern aggressively', () => {
+  const scorer = new HeuristicRiskScorer(() => NOW)
+  const metadata = createMetadata({
+    weekly_downloads: 0,
+    total_versions: 1,
+    published_at: '2026-03-31T00:00:00.000Z',
+  })
+
+  const result = scorer.assessPackage(metadata, {
+    depth: 1,
+    path: {
+      packages: [
+        { name: 'root', version: '1.0.0' },
+        { name: 'risky-package', version: '1.0.0' },
+      ],
+    },
+    dependency_count: 0,
+  })
+
+  assert.equal(result.risk_level, 'critical')
+  assert.equal(result.risk_score, 1)
+  assert.ok(result.signals.some((signal) => signal.type === 'zero_downloads'))
+  assert.ok(result.signals.some((signal) => signal.type === 'new_and_unproven'))
 })

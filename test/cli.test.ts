@@ -29,6 +29,7 @@ function createResult(suspiciousCount = 0): ScanResult {
       dependency_count: 1,
       publish_events_last_30_days: 1,
       has_advisories: false,
+      dependents_count: null,
       risk_score: suspiciousCount > 0 ? 0.8 : 0.1,
       risk_level: suspiciousCount > 0 ? 'critical' : 'safe',
       signals: [],

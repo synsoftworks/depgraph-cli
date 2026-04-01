@@ -32,6 +32,7 @@ export interface PackageMetadata {
   publish_events_last_30_days: number
   weekly_downloads: number | null
   has_advisories: boolean
+  dependents_count: number | null
 }
 
 export interface RiskAssessment {
