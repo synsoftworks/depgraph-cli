@@ -1,6 +1,6 @@
 {
   "name": "@synsoftworks/depgraph-cli",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "description": "ML-powered dependency risk detection for software supply chains",
   "type": "module",
   "keywords": [
