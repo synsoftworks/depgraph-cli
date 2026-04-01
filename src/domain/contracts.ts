@@ -24,6 +24,7 @@ export interface ScanRequest {
 export interface PackageMetadata {
   package: ResolvedPackage
   dependencies: Record<string, string>
+  // v1 requires publish timestamps so age- and churn-based signals remain well-defined.
   published_at: string
   first_published_at: string
   last_published_at: string
