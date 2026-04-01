@@ -1,6 +1,6 @@
 {
   "name": "@synsoftworks/depgraph-cli",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "ML-powered dependency risk detection for software supply chains",
   "type": "module",
   "keywords": [
@@ -29,7 +29,8 @@
   },
   "main": "./dist/cli/index.js",
   "bin": {
-    "depgraph": "./dist/cli/index.js"
+    "depgraph": "./dist/cli/index.js",
+    "depgraph-cli": "./dist/cli/index.js"
   },
   "files": [
     "dist"
