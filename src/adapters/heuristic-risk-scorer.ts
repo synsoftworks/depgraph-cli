@@ -49,6 +49,15 @@ export class HeuristicRiskScorer implements RiskScorer {
       })
     }
 
+    if (metadata.weekly_downloads === 0) {
+      signals.push({
+        type: 'zero_downloads',
+        value: 0,
+        weight: 'high',
+        reason: 'package has never been downloaded — no ecosystem adoption',
+      })
+    }
+
     if (metadata.publish_events_last_30_days >= 3) {
       signals.push({
         type: 'rapid_publish_churn',
@@ -67,12 +76,13 @@ export class HeuristicRiskScorer implements RiskScorer {
       })
     }
 
-    if (ageDays <= 7 && metadata.total_versions <= 2) {
+    if (ageDays <= 7 && metadata.total_versions <= 2 && metadata.weekly_downloads === 0) {
       signals.push({
         type: 'new_and_unproven',
         value: `${ageDays}:${metadata.total_versions}`,
-        weight: 'medium',
-        reason: 'package is both very new and has a very short publish history',
+        weight: 'critical',
+        reason:
+          'package is new, unversioned, and has zero downloads — matches supply chain injection pattern',
       })
     }
 

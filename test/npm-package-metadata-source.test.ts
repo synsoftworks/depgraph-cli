@@ -46,6 +46,7 @@ test('metadata source uses registry time fields and never falls back to Unix epo
   assert.equal(metadata.published_at, '2024-01-15T10:22:33.000Z')
   assert.equal(metadata.first_published_at, '2014-09-02T01:28:28.167Z')
   assert.equal(metadata.last_published_at, '2024-01-15T10:22:33.000Z')
+  assert.equal(metadata.dependents_count, null)
   assert.notEqual(metadata.published_at, '1970-01-01T00:00:00.000Z')
 })
 

@@ -55,6 +55,7 @@ function createMetadata(name: string, version: string): PackageMetadata {
     publish_events_last_30_days: 1,
     weekly_downloads: 1000,
     has_advisories: false,
+    dependents_count: null,
   }
 }
 
