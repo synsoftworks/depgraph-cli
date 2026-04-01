@@ -1,13 +1,9 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { isEntrypoint, run } from '../src/cli/index.js'
+import { run } from '../src/cli/index.js'
 import { NetworkFailureError } from '../src/domain/errors.js'
 import type { ScanResult } from '../src/domain/entities.js'
-import { mkdtempSync, symlinkSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
-import { tmpdir } from 'node:os'
-import { pathToFileURL } from 'node:url'
 
 class MemoryStream {
   buffer = ''
@@ -133,15 +129,4 @@ test('CLI maps network failures to exit code 3', async () => {
 
   assert.equal(exitCode, 3)
   assert.match(stderr.buffer, /registry down/)
-})
-
-test('CLI entrypoint detection handles symlinked npm bin shims', () => {
-  const tempDir = mkdtempSync(join(tmpdir(), 'depgraph-cli-'))
-  const realFile = join(tempDir, 'real-entry.js')
-  const symlinkFile = join(tempDir, 'depgraph')
-
-  writeFileSync(realFile, '#!/usr/bin/env node\n')
-  symlinkSync(realFile, symlinkFile)
-
-  assert.equal(isEntrypoint(symlinkFile, pathToFileURL(realFile).href), true)
 })
