@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { BfsDependencyTraverser } from '../src/adapters/bfs-dependency-traverser.js'
+import { RegistryDependencyTraverser } from '../src/adapters/registry-dependency-traverser.js'
 import type { PackageMetadata, PackageSpec } from '../src/domain/contracts.js'
 import type { PackageMetadataSource } from '../src/domain/ports.js'
 
@@ -37,7 +37,7 @@ function createMetadata(
 }
 
 test('BFS traverser returns closest path first and respects visited keys', async () => {
-  const traverser = new BfsDependencyTraverser(
+  const traverser = new RegistryDependencyTraverser(
     new StubPackageMetadataSource({
       root: createMetadata('root', '1.0.0', {
         a: '^1.0.0',
@@ -70,7 +70,7 @@ test('BFS traverser returns closest path first and respects visited keys', async
 })
 
 test('BFS traverser enforces max depth using resolved name@version keys', async () => {
-  const traverser = new BfsDependencyTraverser(
+  const traverser = new RegistryDependencyTraverser(
     new StubPackageMetadataSource({
       root: createMetadata('root', '1.0.0', {
         a: '^1.0.0',

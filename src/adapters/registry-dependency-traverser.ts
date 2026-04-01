@@ -14,7 +14,7 @@ interface QueueItem {
   path_packages: TraversedPackageNode['path']['packages']
 }
 
-export class BfsDependencyTraverser implements DependencyTraverser {
+export class RegistryDependencyTraverser implements DependencyTraverser {
   constructor(private readonly metadataSource: PackageMetadataSource) {}
 
   async traverse(root: PackageSpec, max_depth: number): Promise<TraversedDependencyGraph> {
