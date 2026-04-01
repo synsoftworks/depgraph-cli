@@ -110,7 +110,7 @@ async function createRuntime(overrides: Partial<CliRuntime>): Promise<CliRuntime
   }
 
   const [
-    { BfsDependencyTraverser },
+    { RegistryDependencyTraverser },
     { HeuristicRiskScorer },
     { NpmPackageMetadataSource },
     { createScanPackageUseCase },
@@ -118,7 +118,7 @@ async function createRuntime(overrides: Partial<CliRuntime>): Promise<CliRuntime
     { renderJson },
     { renderPlainText },
   ] = await Promise.all([
-    import('../adapters/bfs-dependency-traverser.js'),
+    import('../adapters/registry-dependency-traverser.js'),
     import('../adapters/heuristic-risk-scorer.js'),
     import('../adapters/npm-package-metadata-source.js'),
     import('../application/scan-package.js'),
@@ -128,7 +128,7 @@ async function createRuntime(overrides: Partial<CliRuntime>): Promise<CliRuntime
   ])
 
   const metadataSource = new NpmPackageMetadataSource()
-  const traverser = new BfsDependencyTraverser(metadataSource)
+  const traverser = new RegistryDependencyTraverser(metadataSource)
   const scorer = new HeuristicRiskScorer()
 
   return {
