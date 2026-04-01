@@ -12,7 +12,11 @@ interface NpmVersionManifest {
 interface NpmPackument {
   name: string
   versions?: Record<string, NpmVersionManifest>
-  time?: Record<string, string>
+  time?: {
+    created?: string
+    modified?: string
+    [version: string]: string | undefined
+  }
   'dist-tags'?: {
     latest?: string
   }
@@ -35,9 +39,7 @@ export class NpmPackageMetadataSource implements PackageMetadataSource {
     }
 
     const versionTimes = this.collectVersionTimes(packument)
-    const publishedAt = packument.time?.[version] ?? versionTimes.at(-1) ?? new Date(0).toISOString()
-    const firstPublishedAt = versionTimes[0] ?? publishedAt
-    const lastPublishedAt = versionTimes.at(-1) ?? publishedAt
+    const publishDates = this.resolvePublishDates(packument, version, spec.name, versionTimes)
     const publishEventsLast30Days = this.countRecentPublishes(versionTimes, 30)
     const weeklyDownloads = await this.fetchWeeklyDownloads(spec.name)
 
@@ -47,9 +49,9 @@ export class NpmPackageMetadataSource implements PackageMetadataSource {
         version,
       },
       dependencies: this.sortDependencies(manifest.dependencies),
-      published_at: publishedAt,
-      first_published_at: firstPublishedAt,
-      last_published_at: lastPublishedAt,
+      published_at: publishDates.published_at,
+      first_published_at: publishDates.first_published_at,
+      last_published_at: publishDates.last_published_at,
       total_versions: Object.keys(packument.versions ?? {}).length,
       publish_events_last_30_days: publishEventsLast30Days,
       weekly_downloads: weeklyDownloads,
@@ -63,11 +65,7 @@ export class NpmPackageMetadataSource implements PackageMetadataSource {
     let response: Response
 
     try {
-      response = await this.fetcher(url, {
-        headers: {
-          accept: 'application/vnd.npm.install-v1+json',
-        },
-      })
+      response = await this.fetcher(url)
     } catch (error) {
       throw new NetworkFailureError(
         `Unable to reach the npm registry for "${name}": ${this.getErrorMessage(error)}`,
@@ -131,16 +129,55 @@ export class NpmPackageMetadataSource implements PackageMetadataSource {
     const versionSet = new Set(Object.keys(packument.versions ?? {}))
 
     return Object.entries(packument.time ?? {})
-      .filter(([key, value]) => {
-        return (
-          key !== 'created' &&
-          key !== 'modified' &&
-          versionSet.has(key) &&
-          !Number.isNaN(Date.parse(value))
-        )
+      .flatMap(([key, value]) => {
+        if (
+          key === 'created' ||
+          key === 'modified' ||
+          value === undefined ||
+          !versionSet.has(key) ||
+          Number.isNaN(Date.parse(value))
+        ) {
+          return []
+        }
+
+        return [value]
       })
-      .map(([, value]) => value)
       .sort((left, right) => Date.parse(left) - Date.parse(right))
+  }
+
+  private resolvePublishDates(
+    packument: NpmPackument,
+    version: string,
+    packageName: string,
+    versionTimes: string[],
+  ): {
+    published_at: string
+    first_published_at: string
+    last_published_at: string
+  } {
+    // v1 treats publish timestamps as required metadata instead of guessing or null-filling.
+    const createdAt = this.validTimestamp(packument.time?.created)
+    const modifiedAt = this.validTimestamp(packument.time?.modified)
+    const versionPublishedAt = this.validTimestamp(packument.time?.[version])
+    const firstPublishedAt = createdAt ?? versionTimes[0] ?? versionPublishedAt
+    const lastPublishedAt = modifiedAt ?? versionTimes.at(-1) ?? versionPublishedAt ?? firstPublishedAt
+    const publishedAt = versionPublishedAt ?? lastPublishedAt ?? firstPublishedAt
+
+    if (
+      publishedAt === undefined ||
+      firstPublishedAt === undefined ||
+      lastPublishedAt === undefined
+    ) {
+      throw new NetworkFailureError(
+        `Registry metadata for "${packageName}@${version}" does not include publish timestamps.`,
+      )
+    }
+
+    return {
+      published_at: publishedAt,
+      first_published_at: firstPublishedAt,
+      last_published_at: lastPublishedAt,
+    }
   }
 
   private countRecentPublishes(versionTimes: string[], windowDays: number): number {
@@ -148,6 +185,14 @@ export class NpmPackageMetadataSource implements PackageMetadataSource {
     const now = Date.now()
 
     return versionTimes.filter((value) => now - Date.parse(value) <= windowMs).length
+  }
+
+  private validTimestamp(value: string | undefined): string | undefined {
+    if (value === undefined || Number.isNaN(Date.parse(value))) {
+      return undefined
+    }
+
+    return value
   }
 
   private async fetchWeeklyDownloads(name: string): Promise<number | null> {
