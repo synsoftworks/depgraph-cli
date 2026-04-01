@@ -1,88 +1,102 @@
+[![GitHub Repo stars](https://img.shields.io/github/stars/synsoftworks/depgraph-cli?style=flat-square)](https://github.com/synsoftworks/depgraph-cli)
+[![npm version](https://img.shields.io/npm/v/%40synsoftworks%2Fdepgraph-cli?style=flat-square)](https://www.npmjs.com/package/@synsoftworks/depgraph-cli)
+
 # DepGraph CLI
 
-Graph-first dependency risk analysis for npm. DepGraph walks a package’s dependency tree, collects security-relevant signals, scores risk, and explains **why** something was flagged—useful for catching supply-chain anomalies, not only known CVEs.
+DepGraph is a graph-first CLI for scanning npm packages and dependency trees for supply chain risk.
 
-**Built for two audiences:** a rich terminal experience for humans, and stable **`--json`** output for CI and agents.
-
----
+It resolves a package, walks its dependency graph breadth-first, scores metadata-based risk signals, and explains why a node was flagged. The output is designed for both humans in a terminal and agents that need stable JSON.
 
 ## Install
 
-````bash
+Install globally:
+
+```bash
 npm install -g @synsoftworks/depgraph-cli
 ```
 
-The npm package name and the installed CLI binary are different:
-
-- npm package: `@synsoftworks/depgraph-cli`
-- installed command: `depgraph`
-
----
-
-## Usage
-
-Scan a package (name and optional version, npm-style):
+Run without installing:
 
 ```bash
-depgraph scan lodash@4.17.21
-npx @synsoftworks/depgraph-cli scan lodash@4.17.21
-````
-
-**Automation / agents** — deterministic JSON, no TUI:
-
-```bash
-depgraph scan lodash@4.17.21 --json
-depgraph scan lodash --no-tui
+npx -p @synsoftworks/depgraph-cli depgraph --help
 ```
 
-**Common flags** (see `depgraph scan --help` for the full set):
+## Quick Start
 
-| Flag          | Purpose                                     |
-| ------------- | ------------------------------------------- |
-| `--json`      | Structured output for pipelines and tooling |
-| `--no-tui`    | Non-interactive / plain-friendly output     |
-| `--depth`     | Cap how far the graph is traversed          |
-| `--threshold` | Adjust when a node counts as suspicious     |
-| `--verbose`   | Extra detail for debugging                  |
-
-Explain a previous result or focus node (when implemented):
+Show help:
 
 ```bash
-depgraph explain <package[@version]> [flags]
+depgraph --help
 ```
 
----
+Scan a package with plain terminal output:
 
-## Example (human-oriented)
+```bash
+depgraph scan axios --no-tui --depth 2
+```
 
-Illustrative shape of tree output—not guaranteed to match your exact build:
+Scan the same package with JSON output:
+
+```bash
+depgraph scan axios --json --depth 2
+```
+
+## Example Output
+
+Plain-text output from a scan:
 
 ```text
-my-package@1.0.0 ✓ safe
-├─ dep-a@2.1.0 ✓ safe
-├─ dep-b@1.3.0 ✓ safe
-└─ dep-c@0.0.1 ⚠ suspicious
-   • age: 1 day old
-   • downloads: 0 / week
-   • imports: fs, os, child_process
-   • risk score: 0.94
+Scan: plain-crypto-js@0.0.1-security.0
+Overall risk: review (0.48)
+Total scanned: 1
+Suspicious packages: 1
+
+Findings:
+- plain-crypto-js@0.0.1-security.0 [review 0.48] via plain-crypto-js@0.0.1-security.0
+  explanation: package was published 1 day(s) ago; package has only 1 published version(s)
+
+Tree:
+- plain-crypto-js@0.0.1-security.0 [review 0.48]
 ```
 
-## Exit codes
+## JSON Mode
 
-| Code | Meaning                      |
-| ---- | ---------------------------- |
-| `0`  | Success; no threats reported |
-| `1`  | Suspicious packages found    |
-| `2`  | Invalid usage                |
-| `3`  | Network or auth failure      |
-
----
-
-## Development
-
-This repo uses **pnpm** and **TypeScript**. From the project root:
+Use `--json` when DepGraph is being called from CI, scripts, or agents. JSON mode bypasses terminal rendering and emits a deterministic result shape.
 
 ```bash
-pnpm install
+depgraph scan axios --json --depth 2
 ```
+
+Trimmed example:
+
+```json
+{
+  "root": {
+    "name": "axios",
+    "version": "1.14.0",
+    "risk_score": 0.32,
+    "risk_level": "safe"
+  },
+  "findings": [],
+  "total_scanned": 9,
+  "suspicious_count": 0,
+  "overall_risk_score": 0.32,
+  "overall_risk_level": "safe"
+}
+```
+
+This mode is intended for automation, CI checks, and agent tooling that needs machine-readable output instead of terminal formatting.
+
+## Philosophy
+
+DepGraph follows a simple rule: data first, presentation second.
+
+Each command produces structured scan data first, then renders it for either a human terminal session or an agent-oriented JSON consumer. The CLI is designed to work well for both without mixing business logic into presentation.
+
+## Contributing
+
+Issues and pull requests are welcome. If you want to contribute, open an issue first for larger changes so the command behavior, JSON shape, and architecture stay aligned.
+
+## License
+
+MIT
