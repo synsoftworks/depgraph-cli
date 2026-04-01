@@ -1,22 +1,58 @@
 {
   "name": "depgraph-cli",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+  "version": "0.0.1",
+  "description": "ML-powered dependency risk detection for software supply chains",
+  "type": "module",
+  "keywords": [
+    "security",
+    "supply-chain",
+    "dependencies",
+    "npm-audit",
+    "risk-scoring",
+    "cli"
+  ],
+  "author": {
+    "name": "Synthesis Softworks",
+    "email": "sara@synthesissoftworks.com"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "license": "MIT",
+  "homepage": "https://depgraph.sh",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/synsoftworks/depgraph-cli.git"
+  },
+  "bugs": {
+    "url": "https://github.com/synsoftworks/depgraph-cli/issues"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "main": "./dist/cli/index.js",
+  "bin": {
+    "depgraph": "./dist/cli/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx src/cli/index.ts",
+    "test": "node --import tsx --test",
+    "lint": "tsc --noEmit",
+    "prepublishOnly": "pnpm run build"
+  },
   "packageManager": "pnpm@10.33.0",
   "dependencies": {
     "chalk": "^5.6.2",
     "commander": "^14.0.3",
-    "tsx": "^4.21.0",
-    "typescript": "^6.0.2"
+    "ink": "^5.0.0",
+    "react": "^18.3.1",
+    "semver": "^7.7.2"
   },
   "devDependencies": {
-    "@types/node": "^25.5.0"
+    "@types/node": "^25.5.0",
+    "@types/react": "^18.3.12",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.2"
   }
 }

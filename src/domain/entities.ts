@@ -1,33 +1,53 @@
-export type RiskLevel = 'safe' | 'review' | 'critical'
+import type { DependencyPath } from './contracts.js'
 
+export type RiskLevel = 'safe' | 'review' | 'critical'
 export type Recommendation = 'install' | 'review' | 'do_not_install'
+export type RiskSignalWeight = 'low' | 'medium' | 'high' | 'critical'
 
 export interface RiskSignal {
   type: string
-  value: string | number
-  weight: 'low' | 'medium' | 'high' | 'critical'
+  value: string | number | boolean | null
+  weight: RiskSignalWeight
+  reason: string
 }
 
 export interface PackageNode {
   name: string
   version: string
+  key: string
   depth: number
   age_days: number
-  weekly_downloads: number
+  weekly_downloads: number | null
+  published_at: string
   first_published: string
   last_published: string
   total_versions: number
+  dependency_count: number
+  publish_events_last_30_days: number
   has_advisories: boolean
-  sensitive_imports: string[]
   risk_score: number
   risk_level: RiskLevel
   signals: RiskSignal[]
   recommendation: Recommendation
-  dependencies: PackageNode[]   // recursive — DAG node
+  dependencies: PackageNode[]
+}
+
+export interface ScanFinding {
+  key: string
+  name: string
+  version: string
+  depth: number
+  path: DependencyPath
+  risk_score: number
+  risk_level: RiskLevel
+  recommendation: Recommendation
+  signals: RiskSignal[]
+  explanation: string
 }
 
 export interface ScanResult {
   root: PackageNode
+  findings: ScanFinding[]
   total_scanned: number
   suspicious_count: number
   safe_count: number
