@@ -1,0 +1,43 @@
+# Dependencies
+node_modules/
+
+# Build / TypeScript
+dist/
+build/
+out/
+*.tsbuildinfo
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Logs & debug
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Test / coverage (when you add tests)
+coverage/
+.nyc_output/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE (optional — remove if you commit shared IDE config)
+.idea/
+*.swp
+*.swo
+
+# Local / personal only (adjust to taste)
+.cursorrules
+
+# Architecture
+ARCHITECTURE.md
+
+# Agents
+AGENTS.md
