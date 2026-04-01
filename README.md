@@ -8,10 +8,8 @@ Graph-first dependency risk analysis for npm. DepGraph walks a package’s depen
 
 ## Install
 
-```bash
+````bash
 npm install -g @synsoftworks/depgraph-cli
-# or run without global install:
-npx @synsoftworks/depgraph-cli --help
 ```
 
 The npm package name and the installed CLI binary are different:
@@ -28,7 +26,7 @@ Scan a package (name and optional version, npm-style):
 ```bash
 depgraph scan lodash@4.17.21
 npx @synsoftworks/depgraph-cli scan lodash@4.17.21
-```
+````
 
 **Automation / agents** — deterministic JSON, no TUI:
 
