@@ -85,5 +85,3 @@ This repo uses **pnpm** and **TypeScript**. From the project root:
 ```bash
 pnpm install
 ```
-
-See **[ARCHITECTURE.md](./ARCHITECTURE.md)** for layer boundaries (domain → application → adapters → interface → CLI) and design decisions.
