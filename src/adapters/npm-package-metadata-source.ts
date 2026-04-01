@@ -7,6 +7,7 @@ import type { PackageMetadataSource } from '../domain/ports.js'
 interface NpmVersionManifest {
   version: string
   dependencies?: Record<string, string>
+  deprecated?: string
 }
 
 interface NpmPackument {
@@ -41,7 +42,9 @@ export class NpmPackageMetadataSource implements PackageMetadataSource {
     const versionTimes = this.collectVersionTimes(packument)
     const publishDates = this.resolvePublishDates(packument, version, spec.name, versionTimes)
     const publishEventsLast30Days = this.countRecentPublishes(versionTimes, 30)
-    const weeklyDownloads = await this.fetchWeeklyDownloads(spec.name)
+    const deprecatedMessage = manifest.deprecated ?? null
+    const isSecurityTombstone = this.isSecurityTombstone(spec.name, version, deprecatedMessage)
+    const weeklyDownloads = isSecurityTombstone ? null : await this.fetchWeeklyDownloads(spec.name)
 
     return {
       package: {
@@ -55,6 +58,8 @@ export class NpmPackageMetadataSource implements PackageMetadataSource {
       total_versions: Object.keys(packument.versions ?? {}).length,
       publish_events_last_30_days: publishEventsLast30Days,
       weekly_downloads: weeklyDownloads,
+      deprecated_message: deprecatedMessage,
+      is_security_tombstone: isSecurityTombstone,
       has_advisories: false,
       dependents_count: null,
     }
@@ -194,6 +199,23 @@ export class NpmPackageMetadataSource implements PackageMetadataSource {
     }
 
     return value
+  }
+
+  private isSecurityTombstone(
+    packageName: string,
+    version: string,
+    deprecatedMessage: string | null,
+  ): boolean {
+    const normalizedMessage = deprecatedMessage?.toLowerCase() ?? ''
+
+    return (
+      version.includes('-security.') ||
+      normalizedMessage.includes('security holding package') ||
+      normalizedMessage.includes('security placeholder') ||
+      normalizedMessage.includes('security issue') ||
+      normalizedMessage.includes('malicious package') ||
+      normalizedMessage.includes(`placeholder package for ${packageName}`.toLowerCase())
+    )
   }
 
   private async fetchWeeklyDownloads(name: string): Promise<number | null> {

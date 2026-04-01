@@ -18,6 +18,9 @@ export interface PackageNode {
   depth: number
   age_days: number
   weekly_downloads: number | null
+  dependents_count: number | null
+  deprecated_message: string | null
+  is_security_tombstone: boolean
   published_at: string
   first_published: string
   last_published: string
@@ -46,6 +49,9 @@ export interface ScanFinding {
 }
 
 export interface ScanResult {
+  scan_target: string
+  requested_depth: number
+  threshold: number
   root: PackageNode
   findings: ScanFinding[]
   total_scanned: number

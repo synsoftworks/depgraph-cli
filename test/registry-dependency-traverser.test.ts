@@ -32,6 +32,8 @@ function createMetadata(
     total_versions: 3,
     publish_events_last_30_days: 1,
     weekly_downloads: 5000,
+    deprecated_message: null,
+    is_security_tombstone: false,
     has_advisories: false,
     dependents_count: null,
   }

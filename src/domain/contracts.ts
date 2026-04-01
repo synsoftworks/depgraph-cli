@@ -31,6 +31,8 @@ export interface PackageMetadata {
   total_versions: number
   publish_events_last_30_days: number
   weekly_downloads: number | null
+  deprecated_message: string | null
+  is_security_tombstone: boolean
   has_advisories: boolean
   dependents_count: number | null
 }

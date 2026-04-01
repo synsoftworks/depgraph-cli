@@ -19,6 +19,8 @@ function createMetadata(overrides: Partial<PackageMetadata> = {}): PackageMetada
     total_versions: 1,
     publish_events_last_30_days: 4,
     weekly_downloads: 50,
+    deprecated_message: null,
+    is_security_tombstone: false,
     has_advisories: false,
     dependents_count: null,
     ...overrides,
@@ -78,4 +80,27 @@ test('heuristic scorer flags zero-download injection pattern aggressively', () =
   assert.equal(result.risk_score, 1)
   assert.ok(result.signals.some((signal) => signal.type === 'zero_downloads'))
   assert.ok(result.signals.some((signal) => signal.type === 'new_and_unproven'))
+})
+
+test('heuristic scorer treats security tombstones as critical regardless of inherited download counts', () => {
+  const scorer = new HeuristicRiskScorer(() => NOW)
+  const metadata = createMetadata({
+    published_at: '2026-03-31T00:00:00.000Z',
+    weekly_downloads: null,
+    deprecated_message: 'security placeholder package; original package was malicious',
+    is_security_tombstone: true,
+  })
+
+  const result = scorer.assessPackage(metadata, {
+    depth: 0,
+    path: {
+      packages: [{ name: 'plain-crypto-js', version: '0.0.1-security.0' }],
+    },
+    dependency_count: 0,
+  })
+
+  assert.equal(result.risk_level, 'critical')
+  assert.equal(result.risk_score, 1)
+  assert.ok(result.signals.some((signal) => signal.type === 'security_tombstone'))
+  assert.ok(!result.signals.some((signal) => signal.type === 'low_weekly_downloads'))
 })
