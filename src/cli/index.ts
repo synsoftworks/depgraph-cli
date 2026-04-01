@@ -1,8 +1,6 @@
 #!/usr/bin/env node
 
-import { realpathSync } from 'node:fs'
 import { Command, CommanderError, InvalidArgumentError } from 'commander'
-import { fileURLToPath } from 'node:url'
 
 import type { ScanRequest } from '../domain/contracts.js'
 import type { ScanResult } from '../domain/entities.js'
@@ -199,21 +197,7 @@ function getErrorMessage(error: unknown): string {
   return String(error)
 }
 
-export function isEntrypoint(argvPath: string | undefined, moduleUrl: string): boolean {
-  if (argvPath === undefined) {
-    return false
-  }
-
-  const modulePath = fileURLToPath(moduleUrl)
-
-  try {
-    return realpathSync(argvPath) === realpathSync(modulePath)
-  } catch {
-    return argvPath === modulePath
-  }
-}
-
-if (isEntrypoint(process.argv[1], import.meta.url)) {
+if (import.meta.main) {
   run(process.argv.slice(2))
     .then((code) => {
       process.exitCode = code
