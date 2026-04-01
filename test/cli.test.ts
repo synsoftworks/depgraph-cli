@@ -15,6 +15,9 @@ class MemoryStream {
 
 function createResult(suspiciousCount = 0): ScanResult {
   return {
+    scan_target: 'root',
+    requested_depth: 3,
+    threshold: 0.4,
     root: {
       name: 'root',
       version: '1.0.0',
@@ -22,6 +25,9 @@ function createResult(suspiciousCount = 0): ScanResult {
       depth: 0,
       age_days: 10,
       weekly_downloads: 1000,
+      dependents_count: null,
+      deprecated_message: null,
+      is_security_tombstone: false,
       published_at: '2026-03-01T00:00:00.000Z',
       first_published: '2026-01-01T00:00:00.000Z',
       last_published: '2026-03-01T00:00:00.000Z',

@@ -58,6 +58,24 @@ export class HeuristicRiskScorer implements RiskScorer {
       })
     }
 
+    if (metadata.is_security_tombstone) {
+      signals.push({
+        type: 'security_tombstone',
+        value: metadata.package.version,
+        weight: 'critical',
+        reason:
+          metadata.deprecated_message ??
+          'package is an npm security placeholder or tombstone for a previously malicious package',
+      })
+    } else if (metadata.deprecated_message !== null) {
+      signals.push({
+        type: 'deprecated_package',
+        value: metadata.deprecated_message,
+        weight: 'medium',
+        reason: `package is deprecated: ${metadata.deprecated_message}`,
+      })
+    }
+
     if (metadata.publish_events_last_30_days >= 3) {
       signals.push({
         type: 'rapid_publish_churn',
@@ -76,7 +94,11 @@ export class HeuristicRiskScorer implements RiskScorer {
       })
     }
 
-    if (ageDays <= 7 && metadata.total_versions <= 2 && metadata.weekly_downloads === 0) {
+    if (
+      ageDays <= 7 &&
+      metadata.total_versions <= 2 &&
+      metadata.weekly_downloads === 0
+    ) {
       signals.push({
         type: 'new_and_unproven',
         value: `${ageDays}:${metadata.total_versions}`,

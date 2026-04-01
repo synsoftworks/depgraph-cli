@@ -51,6 +51,9 @@ export function createScanPackageUseCase({
         depth: traversedNode.depth,
         age_days: calculateAgeDays(traversedNode.metadata.published_at, startedAt),
         weekly_downloads: traversedNode.metadata.weekly_downloads,
+        dependents_count: traversedNode.metadata.dependents_count,
+        deprecated_message: traversedNode.metadata.deprecated_message,
+        is_security_tombstone: traversedNode.metadata.is_security_tombstone,
         published_at: traversedNode.metadata.published_at,
         first_published: traversedNode.metadata.first_published_at,
         last_published: traversedNode.metadata.last_published_at,
@@ -102,6 +105,9 @@ export function createScanPackageUseCase({
     const completedAt = now()
 
     return {
+      scan_target: request.package_spec,
+      requested_depth: maxDepth,
+      threshold,
       root: nodeMap.get(traversedGraph.root_key)!,
       findings,
       total_scanned: traversedGraph.nodes.length,
