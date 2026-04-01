@@ -1,0 +1,46 @@
+import type { PackageNode, ScanResult } from '../domain/entities.js'
+
+export function renderPlainText(result: ScanResult): string {
+  const lines = [
+    `Scan: ${result.root.key}`,
+    `Overall risk: ${result.overall_risk_level} (${result.overall_risk_score.toFixed(2)})`,
+    `Total scanned: ${result.total_scanned}`,
+    `Suspicious packages: ${result.suspicious_count}`,
+    '',
+    'Findings:',
+  ]
+
+  if (result.findings.length === 0) {
+    lines.push('- none')
+  } else {
+    for (const finding of result.findings) {
+      lines.push(
+        `- ${finding.key} [${finding.risk_level} ${finding.risk_score.toFixed(2)}] via ${formatPath(finding.path.packages)}`,
+      )
+      lines.push(`  explanation: ${finding.explanation}`)
+    }
+  }
+
+  lines.push('', 'Tree:')
+  lines.push(...renderTree(result.root))
+
+  return lines.join('\n')
+}
+
+function renderTree(node: PackageNode, prefix = '', isLast = true): string[] {
+  const connector = prefix.length === 0 ? '-' : isLast ? '└─' : '├─'
+  const lines = [
+    `${prefix}${connector} ${node.key} [${node.risk_level} ${node.risk_score.toFixed(2)}]`,
+  ]
+  const childPrefix = prefix.length === 0 ? '  ' : `${prefix}${isLast ? '  ' : '│ '}`
+
+  node.dependencies.forEach((dependency, index) => {
+    lines.push(...renderTree(dependency, childPrefix, index === node.dependencies.length - 1))
+  })
+
+  return lines
+}
+
+function formatPath(packages: ScanResult['findings'][number]['path']['packages']): string {
+  return packages.map((pkg) => `${pkg.name}@${pkg.version}`).join(' > ')
+}
