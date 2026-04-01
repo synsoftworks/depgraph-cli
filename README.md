@@ -9,12 +9,15 @@ Graph-first dependency risk analysis for npm. DepGraph walks a package’s depen
 ## Install
 
 ```bash
-npm install -g depgraph-cli
+npm install -g @synsoftworks/depgraph-cli
 # or run without global install:
-npx depgraph-cli --help
+npx @synsoftworks/depgraph-cli --help
 ```
 
-The executable name on your PATH is defined by this package’s `bin` field (often `depgraph` or `depgraph-cli`). Below, `depgraph` means whichever binary your install provides.
+The npm package name and the installed CLI binary are different:
+
+- npm package: `@synsoftworks/depgraph-cli`
+- installed command: `depgraph`
 
 ---
 
@@ -23,15 +26,15 @@ The executable name on your PATH is defined by this package’s `bin` field (oft
 Scan a package (name and optional version, npm-style):
 
 ```bash
-depgraph-cli scan lodash@4.17.21
-npx depgraph-cli scan lodash@4.17.21
+depgraph scan lodash@4.17.21
+npx @synsoftworks/depgraph-cli scan lodash@4.17.21
 ```
 
 **Automation / agents** — deterministic JSON, no TUI:
 
 ```bash
-depgraph-cli scan lodash@4.17.21 --json
-depgraph-cli  scan lodash --no-tui
+depgraph scan lodash@4.17.21 --json
+depgraph scan lodash --no-tui
 ```
 
 **Common flags** (see `depgraph scan --help` for the full set):
@@ -47,7 +50,7 @@ depgraph-cli  scan lodash --no-tui
 Explain a previous result or focus node (when implemented):
 
 ```bash
-depgraph-cli explain <package[@version]> [flags]
+depgraph explain <package[@version]> [flags]
 ```
 
 ---

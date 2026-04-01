@@ -28,7 +28,7 @@ export async function run(argv: string[], overrides: Partial<CliRuntime> = {}): 
   let exitCode = 0
 
   program
-    .name('depgraph-cli')
+    .name('depgraph')
     .description('Graph-first dependency risk analysis for npm packages and dependency trees.')
     .configureOutput({
       writeOut: (text) => runtime.stdout.write(text),
@@ -57,9 +57,9 @@ export async function run(argv: string[], overrides: Partial<CliRuntime> = {}): 
       [
         '',
         'Examples:',
-        '  depgraph-cli scan lodash@4.17.21',
-        '  depgraph-cli scan lodash --json',
-        '  depgraph-cli scan @types/node --no-tui --depth 2',
+        '  depgraph scan lodash@4.17.21',
+        '  depgraph scan lodash --json',
+        '  depgraph scan @types/node --no-tui --depth 2',
       ].join('\n'),
     )
     .action(async (packageSpec: string, options) => {
