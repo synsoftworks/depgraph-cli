@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import { createEvaluateScansUseCase } from '../src/application/evaluate-scans.js'
+import { createResolveReviewStateIndexUseCase } from '../src/application/resolve-review-state-index.js'
 import type { ReviewEvent, ScanReviewRecord } from '../src/domain/contracts.js'
 import type { ScanReviewStore } from '../src/domain/ports.js'
 
@@ -37,15 +38,20 @@ class InMemoryReviewStore implements ScanReviewStore {
 }
 
 test('evaluate scans reports metadata coverage and latest-label counts', async () => {
+  const reviewStore = new InMemoryReviewStore(
+    [createRecord()],
+    [
+      createReviewEvent('needs_review', '2026-04-02T00:00:00.000Z'),
+      createReviewEvent('benign', '2026-04-03T00:00:00.000Z'),
+      createReviewEvent('needs_review', '2026-04-04T00:00:00.000Z'),
+    ],
+  )
   const evaluateScans = createEvaluateScansUseCase({
-    reviewStore: new InMemoryReviewStore(
-      [createRecord()],
-      [
-        createReviewEvent('needs_review', '2026-04-02T00:00:00.000Z'),
-        createReviewEvent('benign', '2026-04-03T00:00:00.000Z'),
-        createReviewEvent('needs_review', '2026-04-04T00:00:00.000Z'),
-      ],
-    ),
+    scanRecordSource: reviewStore,
+    rawReviewEventSource: reviewStore,
+    resolveReviewStateIndex: createResolveReviewStateIndexUseCase({
+      reviewEventSource: reviewStore,
+    }),
   })
 
   const summary = await evaluateScans()

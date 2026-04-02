@@ -2,21 +2,29 @@ import type {
   CoverageSignalFrequency,
   EvaluationSummary,
   MetadataCoverageSummary,
+  ResolvedReviewState,
   SignalFrequency,
 } from '../domain/contracts.js'
 import type { PackageNode, RiskSignal } from '../domain/entities.js'
 import type { ScanReviewStore } from '../domain/ports.js'
-import { resolveReviewState, resolveReviewStates } from './resolve-review-state.js'
+import { getResolvedReviewState } from './resolve-review-state.js'
 
 interface EvaluateScansDependencies {
-  reviewStore: ScanReviewStore
+  scanRecordSource: Pick<ScanReviewStore, 'listScanRecords'>
+  rawReviewEventSource: Pick<ScanReviewStore, 'listReviewEvents'>
+  resolveReviewStateIndex: () => Promise<ReadonlyMap<string, ResolvedReviewState>>
 }
 
-export function createEvaluateScansUseCase({ reviewStore }: EvaluateScansDependencies) {
+export function createEvaluateScansUseCase({
+  scanRecordSource,
+  rawReviewEventSource,
+  resolveReviewStateIndex,
+}: EvaluateScansDependencies) {
   return async function evaluateScans(): Promise<EvaluationSummary> {
-    const [scanRecords, reviewEvents] = await Promise.all([
-      reviewStore.listScanRecords(),
-      reviewStore.listReviewEvents(),
+    const [scanRecords, rawReviewEvents, resolvedReviewStateIndex] = await Promise.all([
+      scanRecordSource.listScanRecords(),
+      rawReviewEventSource.listReviewEvents(),
+      resolveReviewStateIndex(),
     ])
 
     const signalCounts = new Map<string, number>()
@@ -35,9 +43,11 @@ export function createEvaluateScansUseCase({ reviewStore }: EvaluateScansDepende
     let maliciousEvents = 0
     let benignEvents = 0
     let needsReviewEvents = 0
-    const resolvedReviewStates = resolveReviewStates(reviewEvents)
+    // `ReviewEvent` is append-only source history. Eval still reads raw events
+    // for raw-event counters, but all label-aware aggregation flows through the
+    // resolved-review-state boundary.
 
-    for (const event of reviewEvents) {
+    for (const event of rawReviewEvents) {
       switch (event.outcome) {
         case 'malicious':
           maliciousEvents += 1
@@ -73,8 +83,7 @@ export function createEvaluateScansUseCase({ reviewStore }: EvaluateScansDepende
         collectSignals(node.signals, signalCounts)
       }
 
-      const resolvedReviewState =
-        resolvedReviewStates.get(record.record_id) ?? resolveReviewState(record.record_id, [])
+      const resolvedReviewState = getResolvedReviewState(record.record_id, resolvedReviewStateIndex)
 
       switch (resolvedReviewState.workflow_status) {
         case 'unreviewed':
@@ -101,7 +110,7 @@ export function createEvaluateScansUseCase({ reviewStore }: EvaluateScansDepende
     return {
       total_scans: scanRecords.length,
       raw_review_events: {
-        total_events: reviewEvents.length,
+        total_events: rawReviewEvents.length,
         malicious_events: maliciousEvents,
         benign_events: benignEvents,
         needs_review_events: needsReviewEvents,
