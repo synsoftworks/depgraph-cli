@@ -1,9 +1,15 @@
 import type { PackageSpec, ResolvedPackage } from './contracts.js'
-import type { Recommendation, RiskLevel } from './entities.js'
+import type { Recommendation, RiskLevel, RiskSignal } from './entities.js'
 import { InvalidUsageError } from './errors.js'
 
 export const DEFAULT_MAX_DEPTH = 3
 export const DEFAULT_THRESHOLD = 0.4
+export const RISK_SIGNAL_WEIGHTS = {
+  low: 0.08,
+  medium: 0.16,
+  high: 0.32,
+  critical: 0.55,
+} as const
 
 export function parsePackageSpec(input: string): PackageSpec {
   const trimmed = input.trim()
@@ -76,6 +82,29 @@ export function packageKey(pkg: ResolvedPackage): string {
   return `${pkg.name}@${pkg.version}`
 }
 
+export function normalizeScanTarget(input: string): string {
+  const parsed = parsePackageSpec(input)
+
+  return parsed.version_range === undefined ? parsed.name : `${parsed.name}@${parsed.version_range}`
+}
+
+export function baselineKeyForScan(scanTarget: string, requestedDepth: number): string {
+  return `${scanTarget}::depth=${requestedDepth}`
+}
+
+export function parsePackageKey(input: string): ResolvedPackage {
+  const parsed = parsePackageSpec(input)
+
+  if (parsed.version_range === undefined) {
+    throw new InvalidUsageError('Package key must include an exact version, for example lodash@4.17.21.')
+  }
+
+  return {
+    name: parsed.name,
+    version: parsed.version_range,
+  }
+}
+
 export function calculateAgeDays(publishedAt: string, now: Date = new Date()): number {
   const publishedTime = new Date(publishedAt).getTime()
 
@@ -98,6 +127,15 @@ export function riskLevelForScore(score: number): RiskLevel {
   }
 
   return 'safe'
+}
+
+export function riskScoreForSignals(signals: RiskSignal[]): number {
+  const score = Math.min(
+    1,
+    signals.reduce((total, signal) => total + RISK_SIGNAL_WEIGHTS[signal.weight], 0),
+  )
+
+  return Number(score.toFixed(2))
 }
 
 export function recommendationForRiskLevel(level: RiskLevel): Recommendation {

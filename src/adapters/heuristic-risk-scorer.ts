@@ -4,15 +4,9 @@ import type { RiskScorer, RiskScorerContext } from '../domain/ports.js'
 import {
   calculateAgeDays,
   recommendationForRiskLevel,
+  riskScoreForSignals,
   riskLevelForScore,
 } from '../domain/value-objects.js'
-
-const SIGNAL_WEIGHTS = {
-  low: 0.08,
-  medium: 0.16,
-  high: 0.32,
-  critical: 0.55,
-} as const
 
 export class HeuristicRiskScorer implements RiskScorer {
   constructor(private readonly now: () => Date = () => new Date()) {}
@@ -108,11 +102,7 @@ export class HeuristicRiskScorer implements RiskScorer {
       })
     }
 
-    const score = Math.min(
-      1,
-      signals.reduce((total, signal) => total + SIGNAL_WEIGHTS[signal.weight], 0),
-    )
-    const riskScore = Number(score.toFixed(2))
+    const riskScore = riskScoreForSignals(signals)
     const riskLevel = riskLevelForScore(riskScore)
 
     return {

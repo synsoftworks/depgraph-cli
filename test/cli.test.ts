@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import { run } from '../src/cli/index.js'
+import type { EvaluationSummary, ReviewEvent } from '../src/domain/contracts.js'
 import { NetworkFailureError } from '../src/domain/errors.js'
 import type { ScanResult } from '../src/domain/entities.js'
 
@@ -15,7 +16,9 @@ class MemoryStream {
 
 function createResult(suspiciousCount = 0): ScanResult {
   return {
+    record_id: '2026-04-01T00:00:00.000Z:root@1.0.0:depth=3',
     scan_target: 'root',
+    baseline_record_id: null,
     requested_depth: 3,
     threshold: 0.4,
     root: {
@@ -71,6 +74,34 @@ function createResult(suspiciousCount = 0): ScanResult {
   }
 }
 
+function createReviewEvent(): ReviewEvent {
+  return {
+    event_id: '2026-04-02T00:00:00.000Z:2026-04-01T00:00:00.000Z:root@1.0.0:depth=3:benign',
+    record_id: '2026-04-01T00:00:00.000Z:root@1.0.0:depth=3',
+    package_key: 'root@1.0.0',
+    created_at: '2026-04-02T00:00:00.000Z',
+    outcome: 'benign',
+    notes: 'reviewed',
+    resolution_timestamp: '2026-04-02T00:00:00.000Z',
+    review_source: 'human',
+    confidence: 0.91,
+  }
+}
+
+function createEvaluationSummary(): EvaluationSummary {
+  return {
+    total_scans: 3,
+    labeled_records: 2,
+    malicious_count: 1,
+    benign_count: 1,
+    needs_review_count: 0,
+    signal_frequency: [
+      { type: 'test_signal', count: 2 },
+      { type: 'new_transitive_dependency_edge', count: 1 },
+    ],
+  }
+}
+
 test('CLI uses plain text renderer for --no-tui and returns suspicious exit code', async () => {
   const stdout = new MemoryStream()
   const stderr = new MemoryStream()
@@ -79,6 +110,8 @@ test('CLI uses plain text renderer for --no-tui and returns suspicious exit code
 
   const exitCode = await run(['scan', 'root', '--no-tui'], {
     scanPackage: async () => createResult(1),
+    reviewScan: async () => createReviewEvent(),
+    evaluateScans: async () => createEvaluationSummary(),
     renderJson: () => {
       throw new Error('JSON renderer should not be used.')
     },
@@ -86,6 +119,10 @@ test('CLI uses plain text renderer for --no-tui and returns suspicious exit code
       plainCalls += 1
       return 'plain text output'
     },
+    renderReviewJson: () => '',
+    renderReviewPlainText: () => '',
+    renderEvaluationJson: () => '',
+    renderEvaluationPlainText: () => '',
     renderInk: async () => {
       inkCalls += 1
     },
@@ -107,8 +144,14 @@ test('CLI returns invalid usage exit code for malformed arguments', async () => 
 
   const exitCode = await run(['scan'], {
     scanPackage: async () => createResult(),
+    reviewScan: async () => createReviewEvent(),
+    evaluateScans: async () => createEvaluationSummary(),
     renderJson: () => '',
     renderPlainText: () => '',
+    renderReviewJson: () => '',
+    renderReviewPlainText: () => '',
+    renderEvaluationJson: () => '',
+    renderEvaluationPlainText: () => '',
     renderInk: async () => {},
     stdout,
     stderr,
@@ -126,8 +169,14 @@ test('CLI maps network failures to exit code 3', async () => {
     scanPackage: async () => {
       throw new NetworkFailureError('registry down')
     },
+    reviewScan: async () => createReviewEvent(),
+    evaluateScans: async () => createEvaluationSummary(),
     renderJson: () => JSON.stringify(createResult()),
     renderPlainText: () => '',
+    renderReviewJson: () => '',
+    renderReviewPlainText: () => '',
+    renderEvaluationJson: () => '',
+    renderEvaluationPlainText: () => '',
     renderInk: async () => {},
     stdout,
     stderr,
@@ -136,4 +185,74 @@ test('CLI maps network failures to exit code 3', async () => {
 
   assert.equal(exitCode, 3)
   assert.match(stderr.buffer, /registry down/)
+})
+
+test('CLI review command updates stored scan records deterministically', async () => {
+  const stdout = new MemoryStream()
+  const stderr = new MemoryStream()
+  let reviewCalls = 0
+
+  const exitCode = await run(['review', 'scan-record-id', '--outcome', 'benign', '--notes', 'checked', '--confidence', '0.8'], {
+    scanPackage: async () => createResult(),
+    reviewScan: async (request) => {
+      reviewCalls += 1
+      assert.deepEqual(request, {
+        record_id: 'scan-record-id',
+        outcome: 'benign',
+        notes: 'checked',
+        review_source: 'human',
+        confidence: 0.8,
+      })
+
+      return createReviewEvent()
+    },
+    evaluateScans: async () => createEvaluationSummary(),
+    renderJson: () => '',
+    renderPlainText: () => '',
+    renderReviewJson: () => {
+      throw new Error('Review JSON renderer should not be used.')
+    },
+    renderReviewPlainText: () => 'review output',
+    renderEvaluationJson: () => '',
+    renderEvaluationPlainText: () => '',
+    renderInk: async () => {},
+    stdout,
+    stderr,
+    isTty: true,
+  })
+
+  assert.equal(exitCode, 0)
+  assert.equal(reviewCalls, 1)
+  assert.match(stdout.buffer, /review output/)
+  assert.equal(stderr.buffer, '')
+})
+
+test('CLI eval command renders evaluation summaries deterministically', async () => {
+  const stdout = new MemoryStream()
+  const stderr = new MemoryStream()
+  let evalCalls = 0
+
+  const exitCode = await run(['eval'], {
+    scanPackage: async () => createResult(),
+    reviewScan: async () => createReviewEvent(),
+    evaluateScans: async () => {
+      evalCalls += 1
+      return createEvaluationSummary()
+    },
+    renderJson: () => '',
+    renderPlainText: () => '',
+    renderReviewJson: () => '',
+    renderReviewPlainText: () => '',
+    renderEvaluationJson: () => '',
+    renderEvaluationPlainText: () => 'eval output',
+    renderInk: async () => {},
+    stdout,
+    stderr,
+    isTty: true,
+  })
+
+  assert.equal(exitCode, 0)
+  assert.equal(evalCalls, 1)
+  assert.match(stdout.buffer, /eval output/)
+  assert.equal(stderr.buffer, '')
 })

@@ -20,11 +20,13 @@ pnpm run dev -- scan axios --no-tui --depth 2
 ## Project Rules
 
 - preserve the architecture boundaries in `AGENTS.md`
+- use [ARCHITECTURE.md](ARCHITECTURE.md) as the repo-level source of truth for layer boundaries and storage model
 - keep CLI parsing in `src/cli`
 - keep business logic in `src/application` and `src/domain`
 - keep npm, traversal, and scoring logic in `src/adapters`
 - keep renderers in `src/interface`
 - keep JSON output deterministic
+- keep scan records immutable and review history append-only
 
 ## Pull Requests
 

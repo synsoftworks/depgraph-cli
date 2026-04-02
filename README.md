@@ -46,6 +46,18 @@ Scan the same package with JSON output:
 depgraph scan axios --json --depth 2
 ```
 
+Append a review outcome to a stored scan record:
+
+```bash
+depgraph review <record_id> --outcome benign --notes "reviewed by analyst"
+```
+
+Inspect local dataset coverage:
+
+```bash
+depgraph eval
+```
+
 ## Plain-Text Example
 
 Plain-text output from a real scan:
@@ -76,7 +88,9 @@ Trimmed example:
 
 ```json
 {
+  "record_id": "2026-04-02T00:00:00.000Z:axios@1.14.0:depth=2",
   "scan_target": "axios",
+  "baseline_record_id": null,
   "requested_depth": 2,
   "threshold": 0.4,
   "root": {
@@ -105,6 +119,18 @@ DepGraph uses explainable metadata-based signals instead of opaque output. Curre
 - unusual publish churn
 - large dependency surface
 - npm security tombstones and deprecations
+- newly introduced direct and transitive dependency edges relative to the latest local baseline scan
+
+Human review is captured separately from heuristic scoring so the stored dataset can become durable ground truth over time.
+
+## Local Data Model
+
+DepGraph now persists repo-local history under `.depgraph/`:
+
+- `scans.jsonl` for immutable scan records
+- `review-events.jsonl` for append-only review annotations
+
+This keeps the local dataset inspectable, scriptable, and cheap to evolve without introducing a database yet.
 
 ## Current Scope
 
@@ -116,7 +142,8 @@ Current limitations:
 - no tarball or source inspection
 - no advisory database integration beyond package metadata
 - no sensitive import analysis yet
-- no learned or ML-based scoring
+- no learned or ML-based scoring yet
+- local dataset evaluation is intentionally basic today
 
 ## Roadmap
 
@@ -124,6 +151,9 @@ Current limitations:
 - [x] rich Ink terminal UI
 - [x] deterministic JSON output for agents and CI
 - [x] breadth-first traversal with shortest suspicious paths
+- [x] local scan persistence and append-only review capture
+- [x] dependency graph delta against prior local baseline
+- [x] basic local dataset evaluation
 - [ ] lockfile scanning
 - [ ] advisory integration
 - [ ] stronger composite signals
@@ -135,6 +165,8 @@ Current limitations:
 DepGraph follows a simple rule: data first, presentation second.
 
 Each command produces structured scan data first, then renders it for either a human terminal session or an agent-oriented JSON consumer. The CLI is designed to work well for both without mixing business logic into presentation.
+
+For the system structure, storage model, and architectural invariants, see [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Contributing
 

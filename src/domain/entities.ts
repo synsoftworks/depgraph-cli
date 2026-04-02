@@ -3,6 +3,8 @@ import type { DependencyPath } from './contracts.js'
 export type RiskLevel = 'safe' | 'review' | 'critical'
 export type Recommendation = 'install' | 'review' | 'do_not_install'
 export type RiskSignalWeight = 'low' | 'medium' | 'high' | 'critical'
+export type ReviewOutcome = 'malicious' | 'benign' | 'needs_review'
+export type ReviewSource = 'human' | 'auto' | 'external'
 
 export interface RiskSignal {
   type: string
@@ -49,7 +51,9 @@ export interface ScanFinding {
 }
 
 export interface ScanResult {
+  record_id: string
   scan_target: string
+  baseline_record_id: string | null
   requested_depth: number
   threshold: number
   root: PackageNode

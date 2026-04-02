@@ -1,4 +1,11 @@
-import type { DependencyPath, PackageMetadata, PackageSpec, RiskAssessment } from './contracts.js'
+import type {
+  DependencyPath,
+  PackageMetadata,
+  PackageSpec,
+  RiskAssessment,
+  ReviewEvent,
+  ScanReviewRecord,
+} from './contracts.js'
 
 export interface TraversedPackageNode {
   key: string
@@ -30,4 +37,13 @@ export interface RiskScorerContext {
 
 export interface RiskScorer {
   assessPackage(metadata: PackageMetadata, context: RiskScorerContext): RiskAssessment
+}
+
+export interface ScanReviewStore {
+  appendScanRecord(record: ScanReviewRecord): Promise<void>
+  findLatestScanByBaseline(baselineKey: string): Promise<ScanReviewRecord | null>
+  findScanRecord(recordId: string): Promise<ScanReviewRecord | null>
+  appendReviewEvent(event: ReviewEvent): Promise<void>
+  listScanRecords(): Promise<ScanReviewRecord[]>
+  listReviewEvents(): Promise<ReviewEvent[]>
 }
