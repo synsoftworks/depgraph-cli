@@ -42,6 +42,7 @@
     "build": "tsc -p tsconfig.json",
     "dev": "tsx src/cli/index.ts",
     "test": "node --import tsx --test",
+    "test:smoke": "node --import tsx --test test/json-renderer.test.ts test/review-renderer.test.ts test/evaluation-renderer.test.ts test/integrated-scenarios.test.ts",
     "lint": "tsc --noEmit",
     "prepublishOnly": "pnpm run build"
   },
