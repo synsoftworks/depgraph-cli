@@ -191,6 +191,7 @@ async function createRuntime(overrides: Partial<CliRuntime>): Promise<CliRuntime
     { JsonlScanReviewStore, defaultScanReviewStorePaths },
     { RegistryDependencyTraverser },
     { HeuristicRiskScorer },
+    { createResolveReviewStateIndexUseCase },
     { NpmPackageMetadataSource },
     { createEvaluateScansUseCase },
     { createReviewScanUseCase },
@@ -204,6 +205,7 @@ async function createRuntime(overrides: Partial<CliRuntime>): Promise<CliRuntime
     import('../adapters/jsonl-scan-review-store.js'),
     import('../adapters/registry-dependency-traverser.js'),
     import('../adapters/heuristic-risk-scorer.js'),
+    import('../application/resolve-review-state-index.js'),
     import('../adapters/npm-package-metadata-source.js'),
     import('../application/evaluate-scans.js'),
     import('../application/review-scan.js'),
@@ -216,6 +218,9 @@ async function createRuntime(overrides: Partial<CliRuntime>): Promise<CliRuntime
   ])
 
   const reviewStore = new JsonlScanReviewStore(defaultScanReviewStorePaths(process.cwd()))
+  const resolveReviewStateIndex = createResolveReviewStateIndexUseCase({
+    reviewEventSource: reviewStore,
+  })
   const metadataSource = new NpmPackageMetadataSource()
   const traverser = new RegistryDependencyTraverser(metadataSource)
   const scorer = new HeuristicRiskScorer()
@@ -230,7 +235,9 @@ async function createRuntime(overrides: Partial<CliRuntime>): Promise<CliRuntime
       reviewStore,
     }),
     evaluateScans: createEvaluateScansUseCase({
-      reviewStore,
+      scanRecordSource: reviewStore,
+      rawReviewEventSource: reviewStore,
+      resolveReviewStateIndex,
     }),
     renderJson,
     renderPlainText,

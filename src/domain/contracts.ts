@@ -109,6 +109,11 @@ export interface ReviewScanRequest {
   confidence: number | null
 }
 
+/**
+ * Review events are append-only source history.
+ * They preserve raw review evidence, but they are not a safe label interface.
+ * Any label-aware consumer must derive `ResolvedReviewState` before using them.
+ */
 export interface ReviewEvent {
   event_id: string
   record_id: string
@@ -125,6 +130,11 @@ export type CanonicalLabel = 'malicious' | 'benign'
 export type WorkflowStatus = 'unreviewed' | 'needs_review' | 'resolved'
 export type CanonicalLabelSource = 'latest_label_bearing_event'
 
+/**
+ * Resolved review state is the label-facing view of review history.
+ * Canonical labels are derived from raw review events and must not be stored
+ * or treated as mutable source-of-truth state.
+ */
 export interface ResolvedReviewState {
   record_id: string
   latest_review_event: ReviewEvent | null
