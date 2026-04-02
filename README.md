@@ -1,8 +1,7 @@
-<p align="center">
-  <img src="docs/assets/node.png" alt="DepGraph mascot" width="88">
-</p>
-
-<h1 align="center">DepGraph CLI</h1>
+<h1 align="center">
+  <img src="docs/assets/node.png" alt="DepGraph mascot" width="88"><br>
+  DepGraph CLI
+</h1>
 
 <p align="center">
   <a href="https://github.com/synsoftworks/depgraph-cli"><img alt="GitHub Repo stars" src="https://img.shields.io/github/stars/synsoftworks/depgraph-cli?style=flat-square"></a>
