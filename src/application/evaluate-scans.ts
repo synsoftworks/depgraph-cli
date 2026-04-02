@@ -2,11 +2,11 @@ import type {
   CoverageSignalFrequency,
   EvaluationSummary,
   MetadataCoverageSummary,
-  ReviewEvent,
   SignalFrequency,
 } from '../domain/contracts.js'
 import type { PackageNode, RiskSignal } from '../domain/entities.js'
 import type { ScanReviewStore } from '../domain/ports.js'
+import { resolveReviewState, resolveReviewStates } from './resolve-review-state.js'
 
 interface EvaluateScansDependencies {
   reviewStore: ScanReviewStore
@@ -19,7 +19,6 @@ export function createEvaluateScansUseCase({ reviewStore }: EvaluateScansDepende
       reviewStore.listReviewEvents(),
     ])
 
-    const latestReviewByRecordId = selectLatestReviews(reviewEvents)
     const signalCounts = new Map<string, number>()
     const knownDownloadsSignalCounts = new Map<string, number>()
     const missingDownloadsSignalCounts = new Map<string, number>()
@@ -28,9 +27,29 @@ export function createEvaluateScansUseCase({ reviewStore }: EvaluateScansDepende
     let totalNodes = 0
     let nodesMissingWeeklyDownloads = 0
     let nodesMissingDependentsCount = 0
-    let maliciousCount = 0
-    let benignCount = 0
-    let needsReviewCount = 0
+    let unreviewedRecords = 0
+    let needsReviewRecords = 0
+    let resolvedRecords = 0
+    let canonicalMaliciousRecords = 0
+    let canonicalBenignRecords = 0
+    let maliciousEvents = 0
+    let benignEvents = 0
+    let needsReviewEvents = 0
+    const resolvedReviewStates = resolveReviewStates(reviewEvents)
+
+    for (const event of reviewEvents) {
+      switch (event.outcome) {
+        case 'malicious':
+          maliciousEvents += 1
+          break
+        case 'benign':
+          benignEvents += 1
+          break
+        case 'needs_review':
+          needsReviewEvents += 1
+          break
+      }
+    }
 
     for (const record of scanRecords) {
       // This is feature-surface observability for the dataset, not a quality metric.
@@ -54,31 +73,51 @@ export function createEvaluateScansUseCase({ reviewStore }: EvaluateScansDepende
         collectSignals(node.signals, signalCounts)
       }
 
-      const latestReview = latestReviewByRecordId.get(record.record_id)
+      const resolvedReviewState =
+        resolvedReviewStates.get(record.record_id) ?? resolveReviewState(record.record_id, [])
 
-      if (latestReview === undefined) {
-        continue
-      }
-
-      switch (latestReview.outcome) {
-        case 'malicious':
-          maliciousCount += 1
-          break
-        case 'benign':
-          benignCount += 1
+      switch (resolvedReviewState.workflow_status) {
+        case 'unreviewed':
+          unreviewedRecords += 1
           break
         case 'needs_review':
-          needsReviewCount += 1
+          needsReviewRecords += 1
+          break
+        case 'resolved':
+          resolvedRecords += 1
+          break
+      }
+
+      switch (resolvedReviewState.canonical_label) {
+        case 'malicious':
+          canonicalMaliciousRecords += 1
+          break
+        case 'benign':
+          canonicalBenignRecords += 1
           break
       }
     }
 
     return {
       total_scans: scanRecords.length,
-      labeled_records: latestReviewByRecordId.size,
-      malicious_count: maliciousCount,
-      benign_count: benignCount,
-      needs_review_count: needsReviewCount,
+      raw_review_events: {
+        total_events: reviewEvents.length,
+        malicious_events: maliciousEvents,
+        benign_events: benignEvents,
+        needs_review_events: needsReviewEvents,
+      },
+      canonical_labels: {
+        total_labeled_records: canonicalMaliciousRecords + canonicalBenignRecords,
+        malicious_records: canonicalMaliciousRecords,
+        benign_records: canonicalBenignRecords,
+        unlabeled_records: scanRecords.length - (canonicalMaliciousRecords + canonicalBenignRecords),
+        derived_from: 'latest_label_bearing_event',
+      },
+      workflow_status: {
+        unreviewed_records: unreviewedRecords,
+        needs_review_records: needsReviewRecords,
+        resolved_records: resolvedRecords,
+      },
       signal_frequency: toSortedSignalFrequency(signalCounts),
       metadata_coverage: buildMetadataCoverageSummary({
         totalNodes,
@@ -91,20 +130,6 @@ export function createEvaluateScansUseCase({ reviewStore }: EvaluateScansDepende
       }),
     }
   }
-}
-
-function selectLatestReviews(reviewEvents: ReviewEvent[]): Map<string, ReviewEvent> {
-  const latestByRecordId = new Map<string, ReviewEvent>()
-
-  for (const event of reviewEvents) {
-    const current = latestByRecordId.get(event.record_id)
-
-    if (current === undefined || current.created_at < event.created_at) {
-      latestByRecordId.set(event.record_id, event)
-    }
-  }
-
-  return latestByRecordId
 }
 
 function flattenNodes(root: PackageNode): PackageNode[] {

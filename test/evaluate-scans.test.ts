@@ -43,6 +43,7 @@ test('evaluate scans reports metadata coverage and latest-label counts', async (
       [
         createReviewEvent('needs_review', '2026-04-02T00:00:00.000Z'),
         createReviewEvent('benign', '2026-04-03T00:00:00.000Z'),
+        createReviewEvent('needs_review', '2026-04-04T00:00:00.000Z'),
       ],
     ),
   })
@@ -50,9 +51,16 @@ test('evaluate scans reports metadata coverage and latest-label counts', async (
   const summary = await evaluateScans()
 
   assert.equal(summary.total_scans, 1)
-  assert.equal(summary.labeled_records, 1)
-  assert.equal(summary.benign_count, 1)
-  assert.equal(summary.needs_review_count, 0)
+  assert.equal(summary.raw_review_events.total_events, 3)
+  assert.equal(summary.raw_review_events.benign_events, 1)
+  assert.equal(summary.raw_review_events.needs_review_events, 2)
+  assert.equal(summary.canonical_labels.total_labeled_records, 1)
+  assert.equal(summary.canonical_labels.benign_records, 1)
+  assert.equal(summary.canonical_labels.malicious_records, 0)
+  assert.equal(summary.canonical_labels.unlabeled_records, 0)
+  assert.equal(summary.workflow_status.needs_review_records, 1)
+  assert.equal(summary.workflow_status.resolved_records, 0)
+  assert.equal(summary.workflow_status.unreviewed_records, 0)
   assert.equal(summary.metadata_coverage.weekly_downloads.missing_count, 1)
   assert.equal(summary.metadata_coverage.weekly_downloads.total_nodes, 2)
   assert.equal(summary.metadata_coverage.weekly_downloads.missing_percent, 50)

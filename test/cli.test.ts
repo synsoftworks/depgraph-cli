@@ -92,10 +92,24 @@ function createReviewEvent(): ReviewEvent {
 function createEvaluationSummary(): EvaluationSummary {
   return {
     total_scans: 3,
-    labeled_records: 2,
-    malicious_count: 1,
-    benign_count: 1,
-    needs_review_count: 0,
+    raw_review_events: {
+      total_events: 3,
+      malicious_events: 1,
+      benign_events: 1,
+      needs_review_events: 1,
+    },
+    canonical_labels: {
+      total_labeled_records: 2,
+      malicious_records: 1,
+      benign_records: 1,
+      unlabeled_records: 1,
+      derived_from: 'latest_label_bearing_event',
+    },
+    workflow_status: {
+      unreviewed_records: 1,
+      needs_review_records: 1,
+      resolved_records: 1,
+    },
     signal_frequency: [
       { type: 'test_signal', count: 2 },
       { type: 'new_transitive_dependency_edge', count: 1 },
