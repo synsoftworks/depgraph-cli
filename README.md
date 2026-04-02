@@ -1,6 +1,4 @@
-<p align="center">
-  <strong>DepGraph CLI</strong>
-</p>
+<h1 align="center">DepGraph CLI</h1>
 
 <p align="center">
   <a href="https://github.com/synsoftworks/depgraph-cli"><img alt="GitHub Repo stars" src="https://img.shields.io/github/stars/synsoftworks/depgraph-cli?style=flat-square"></a>
