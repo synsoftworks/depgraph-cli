@@ -7,10 +7,23 @@ export function renderEvaluationJson(summary: EvaluationSummary): string {
 export function renderEvaluationPlainText(summary: EvaluationSummary): string {
   const lines = [
     `Total scans: ${summary.total_scans}`,
-    `Labeled records: ${summary.labeled_records}`,
-    `Malicious: ${summary.malicious_count}`,
-    `Benign: ${summary.benign_count}`,
-    `Needs review: ${summary.needs_review_count}`,
+    '',
+    'Raw review events:',
+    `- total: ${summary.raw_review_events.total_events}`,
+    `- malicious: ${summary.raw_review_events.malicious_events}`,
+    `- benign: ${summary.raw_review_events.benign_events}`,
+    `- needs_review: ${summary.raw_review_events.needs_review_events}`,
+    '',
+    `Canonical labels (derived from ${summary.canonical_labels.derived_from}):`,
+    `- labeled records: ${summary.canonical_labels.total_labeled_records}`,
+    `- malicious: ${summary.canonical_labels.malicious_records}`,
+    `- benign: ${summary.canonical_labels.benign_records}`,
+    `- unlabeled: ${summary.canonical_labels.unlabeled_records}`,
+    '',
+    'Workflow status:',
+    `- unreviewed: ${summary.workflow_status.unreviewed_records}`,
+    `- needs_review: ${summary.workflow_status.needs_review_records}`,
+    `- resolved: ${summary.workflow_status.resolved_records}`,
     '',
     'Metadata coverage:',
     `- weekly_downloads missing: ${summary.metadata_coverage.weekly_downloads.missing_count}/${summary.metadata_coverage.weekly_downloads.total_nodes} nodes (${summary.metadata_coverage.weekly_downloads.missing_percent.toFixed(2)}%)`,
@@ -35,7 +48,9 @@ export function renderEvaluationPlainText(summary: EvaluationSummary): string {
   return lines.join('\n')
 }
 
-function renderCoverageSignals(summary: EvaluationSummary['metadata_coverage']['signal_frequency_by_weekly_downloads']): string[] {
+function renderCoverageSignals(
+  summary: EvaluationSummary['metadata_coverage']['signal_frequency_by_weekly_downloads'],
+): string[] {
   const lines = ['- known:']
 
   if (summary.known.length === 0) {

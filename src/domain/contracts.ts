@@ -121,6 +121,19 @@ export interface ReviewEvent {
   confidence: number | null
 }
 
+export type CanonicalLabel = 'malicious' | 'benign'
+export type WorkflowStatus = 'unreviewed' | 'needs_review' | 'resolved'
+export type CanonicalLabelSource = 'latest_label_bearing_event'
+
+export interface ResolvedReviewState {
+  record_id: string
+  latest_review_event: ReviewEvent | null
+  latest_label_bearing_event: ReviewEvent | null
+  workflow_status: WorkflowStatus
+  canonical_label: CanonicalLabel | null
+  canonical_label_source: CanonicalLabelSource | null
+}
+
 export interface SignalFrequency {
   type: string
   count: number
@@ -144,12 +157,32 @@ export interface MetadataCoverageSummary {
   signal_frequency_by_dependents_count: CoverageSignalFrequency
 }
 
+export interface RawReviewEventSummary {
+  total_events: number
+  malicious_events: number
+  benign_events: number
+  needs_review_events: number
+}
+
+export interface CanonicalLabelSummary {
+  total_labeled_records: number
+  malicious_records: number
+  benign_records: number
+  unlabeled_records: number
+  derived_from: CanonicalLabelSource
+}
+
+export interface WorkflowStatusSummary {
+  unreviewed_records: number
+  needs_review_records: number
+  resolved_records: number
+}
+
 export interface EvaluationSummary {
   total_scans: number
-  labeled_records: number
-  malicious_count: number
-  benign_count: number
-  needs_review_count: number
+  raw_review_events: RawReviewEventSummary
+  canonical_labels: CanonicalLabelSummary
+  workflow_status: WorkflowStatusSummary
   signal_frequency: SignalFrequency[]
   metadata_coverage: MetadataCoverageSummary
 }
