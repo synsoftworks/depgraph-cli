@@ -4,16 +4,15 @@
 
 <p align="center">
   <a href="https://www.npmjs.com/package/@synsoftworks/depgraph-cli"><img alt="npm version" src="https://img.shields.io/npm/v/%40synsoftworks%2Fdepgraph-cli?style=flat-square"></a>
-  <img alt="Node.js 20+" src="https://img.shields.io/badge/Node.js-20%2B-5FA04E?style=flat-square">
   <a href="https://github.com/synsoftworks/depgraph-cli/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/synsoftworks/depgraph-cli/actions/workflows/ci.yml/badge.svg"></a>
   <a href="https://github.com/synsoftworks/depgraph-cli/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/github/license/synsoftworks/depgraph-cli?style=flat-square"></a>
 </p>
 
-DepGraph is a graph-first CLI for scanning npm packages and dependency trees for supply chain risk.
+DepGraph is a supply chain security tool that lives in your terminal, sniffs your npm dependency tree for attack signals, and tells you exactly why a package looks suspicious — before you ship it.
 
-It resolves a package, walks its dependency graph breadth-first, scores metadata-based risk signals, and explains why a node was flagged. The output is designed for both humans in a terminal and agents that need stable JSON.
+Run it before every install. Use the JSON output in CI. Let Node do the sniffing.
 
-## Install
+## Get Started
 
 Install globally:
 
