@@ -45,6 +45,7 @@ function createResult(suspiciousCount = 0): ScanResult {
       recommendation: suspiciousCount > 0 ? 'do_not_install' : 'install',
       dependencies: [],
     },
+    edge_findings: [],
     findings:
       suspiciousCount > 0
         ? [
@@ -99,6 +100,29 @@ function createEvaluationSummary(): EvaluationSummary {
       { type: 'test_signal', count: 2 },
       { type: 'new_transitive_dependency_edge', count: 1 },
     ],
+    metadata_coverage: {
+      weekly_downloads: {
+        total_nodes: 6,
+        missing_count: 2,
+        missing_percent: 33.33,
+      },
+      dependents_count: {
+        total_nodes: 6,
+        missing_count: 4,
+        missing_percent: 66.67,
+      },
+      signal_frequency_by_weekly_downloads: {
+        known: [{ type: 'test_signal', count: 2 }],
+        missing: [{ type: 'new_transitive_dependency_edge', count: 1 }],
+      },
+      signal_frequency_by_dependents_count: {
+        known: [],
+        missing: [
+          { type: 'test_signal', count: 2 },
+          { type: 'new_transitive_dependency_edge', count: 1 },
+        ],
+      },
+    },
   }
 }
 

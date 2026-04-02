@@ -27,6 +27,7 @@ export interface ScanRequest {
   max_depth: number
   threshold: number
   verbose: boolean
+  workspace_identity?: string
 }
 
 export interface PackageMetadata {
@@ -58,12 +59,22 @@ export interface DependencyGraphEdge {
   child_depth: number
 }
 
-export interface NewDependencyEdgeFinding {
+export interface BaselineIdentity {
+  scan_target: string
+  requested_depth: number
+  workspace_identity: string
+}
+
+export interface EdgeFinding {
   parent_key: string
   child_key: string
   path: string[]
   depth: number
   edge_type: 'direct' | 'transitive'
+  baseline_record_id: string | null
+  baseline_identity: BaselineIdentity
+  reason: string
+  recommendation: Recommendation | null
 }
 
 export interface ScanReviewRecord {
@@ -72,6 +83,7 @@ export interface ScanReviewRecord {
   package: ResolvedPackage
   package_key: string
   scan_target: string
+  baseline_identity: BaselineIdentity
   baseline_key: string
   baseline_record_id: string | null
   requested_depth: number
@@ -86,7 +98,7 @@ export interface ScanReviewRecord {
   safe_count: number
   scan_duration_ms: number
   dependency_edges: DependencyGraphEdge[]
-  new_dependency_edge_findings: NewDependencyEdgeFinding[]
+  edge_findings: EdgeFinding[]
 }
 
 export interface ReviewScanRequest {
@@ -114,6 +126,24 @@ export interface SignalFrequency {
   count: number
 }
 
+export interface MetadataFieldCoverage {
+  total_nodes: number
+  missing_count: number
+  missing_percent: number
+}
+
+export interface CoverageSignalFrequency {
+  known: SignalFrequency[]
+  missing: SignalFrequency[]
+}
+
+export interface MetadataCoverageSummary {
+  weekly_downloads: MetadataFieldCoverage
+  dependents_count: MetadataFieldCoverage
+  signal_frequency_by_weekly_downloads: CoverageSignalFrequency
+  signal_frequency_by_dependents_count: CoverageSignalFrequency
+}
+
 export interface EvaluationSummary {
   total_scans: number
   labeled_records: number
@@ -121,4 +151,5 @@ export interface EvaluationSummary {
   benign_count: number
   needs_review_count: number
   signal_frequency: SignalFrequency[]
+  metadata_coverage: MetadataCoverageSummary
 }

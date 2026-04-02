@@ -1,4 +1,5 @@
 import type {
+  BaselineIdentity,
   DependencyPath,
   PackageMetadata,
   PackageSpec,
@@ -41,7 +42,7 @@ export interface RiskScorer {
 
 export interface ScanReviewStore {
   appendScanRecord(record: ScanReviewRecord): Promise<void>
-  findLatestScanByBaseline(baselineKey: string): Promise<ScanReviewRecord | null>
+  findLatestScanByBaseline(baselineIdentity: BaselineIdentity): Promise<ScanReviewRecord | null>
   findScanRecord(recordId: string): Promise<ScanReviewRecord | null>
   appendReviewEvent(event: ReviewEvent): Promise<void>
   listScanRecords(): Promise<ScanReviewRecord[]>

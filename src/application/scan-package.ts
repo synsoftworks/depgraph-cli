@@ -1,6 +1,7 @@
 import type {
+  BaselineIdentity,
   DependencyGraphEdge,
-  NewDependencyEdgeFinding,
+  EdgeFinding,
   RiskAssessment,
   ScanRequest,
   ScanReviewRecord,
@@ -14,7 +15,8 @@ import type {
   TraversedDependencyGraph,
 } from '../domain/ports.js'
 import {
-  baselineKeyForScan,
+  baselineIdentityForScan,
+  baselineKeyForIdentity,
   calculateAgeDays,
   normalizeMaxDepth,
   normalizeScanTarget,
@@ -50,7 +52,12 @@ export function createScanPackageUseCase({
     const scanTarget = normalizeScanTarget(request.package_spec)
     const maxDepth = normalizeMaxDepth(request.max_depth)
     const threshold = normalizeThreshold(request.threshold)
-    const baselineKey = baselineKeyForScan(scanTarget, maxDepth)
+    const baselineIdentity = baselineIdentityForScan(
+      scanTarget,
+      maxDepth,
+      request.workspace_identity,
+    )
+    const baselineKey = baselineKeyForIdentity(baselineIdentity)
     const traversedGraph = await traverser.traverse(packageSpec, maxDepth)
 
     if (traversedGraph.root_key.length === 0 || traversedGraph.nodes.length === 0) {
@@ -59,9 +66,9 @@ export function createScanPackageUseCase({
 
     const edgeSnapshots = buildDependencyEdgeSnapshots(traversedGraph)
     const dependencyEdges = edgeSnapshots.map((snapshot) => snapshot.edge)
-    const previousRecord = await findPreviousRecord(reviewStore, baselineKey)
-    const newDependencyEdgeFindings = buildNewDependencyEdgeFindings(previousRecord, edgeSnapshots)
-    const deltaSignals = buildDeltaSignals(newDependencyEdgeFindings, previousRecord)
+    const previousRecord = await findPreviousRecord(reviewStore, baselineIdentity)
+    const edgeFindings = buildEdgeFindings(previousRecord, edgeSnapshots, baselineIdentity)
+    const deltaSignals = buildDeltaSignals(edgeFindings)
     const nodeMap = new Map<string, PackageNode>()
     const findings: ScanFinding[] = []
     let overallRiskScore = 0
@@ -148,6 +155,7 @@ export function createScanPackageUseCase({
       requested_depth: maxDepth,
       threshold,
       root: rootNode,
+      edge_findings: edgeFindings,
       findings,
       total_scanned: traversedGraph.nodes.length,
       suspicious_count: findings.length,
@@ -161,10 +169,11 @@ export function createScanPackageUseCase({
     await reviewStore.appendScanRecord(
       buildScanReviewRecord({
         result,
+        baselineIdentity,
         dependencyEdges,
         baselineKey,
         baselineRecordId: previousRecord?.record_id ?? null,
-        newDependencyEdgeFindings,
+        edgeFindings,
       }),
     )
 
@@ -194,10 +203,10 @@ function compareFindings(left: ScanFinding, right: ScanFinding): number {
 
 async function findPreviousRecord(
   reviewStore: ScanReviewStore,
-  baselineKey: string,
+  baselineIdentity: BaselineIdentity,
 ): Promise<ScanReviewRecord | null> {
   try {
-    return await reviewStore.findLatestScanByBaseline(baselineKey)
+    return await reviewStore.findLatestScanByBaseline(baselineIdentity)
   } catch {
     return null
   }
@@ -243,10 +252,11 @@ function buildDependencyEdgeSnapshots(graph: TraversedDependencyGraph): Dependen
   return snapshots
 }
 
-function buildNewDependencyEdgeFindings(
+function buildEdgeFindings(
   previousRecord: ScanReviewRecord | null,
   currentEdges: DependencyEdgeSnapshot[],
-): NewDependencyEdgeFinding[] {
+  baselineIdentity: BaselineIdentity,
+): EdgeFinding[] {
   if (previousRecord === null) {
     return []
   }
@@ -261,22 +271,21 @@ function buildNewDependencyEdgeFindings(
       path: snapshot.path,
       depth: snapshot.edge.child_depth,
       edge_type: snapshot.edge.child_depth === 1 ? 'direct' : 'transitive',
+      baseline_record_id: previousRecord.record_id,
+      baseline_identity: baselineIdentity,
+      reason: `new ${snapshot.edge.child_depth === 1 ? 'direct' : 'transitive'} dependency edge ${snapshot.edge.from} -> ${snapshot.edge.to} via ${snapshot.path.join(' > ')} compared with baseline ${previousRecord.created_at}`,
+      recommendation: 'review',
     }))
 }
 
 function buildDeltaSignals(
-  newEdgeFindings: NewDependencyEdgeFinding[],
-  previousRecord: ScanReviewRecord | null,
+  edgeFindings: EdgeFinding[],
 ): RiskSignal[] {
-  if (previousRecord === null) {
-    return []
-  }
-
-  return newEdgeFindings.map((finding) => ({
+  return edgeFindings.map((finding) => ({
     type: finding.edge_type === 'direct' ? 'new_direct_dependency_edge' : 'new_transitive_dependency_edge',
     value: `${finding.parent_key}->${finding.child_key}`,
     weight: finding.edge_type === 'direct' ? 'high' : 'medium',
-    reason: `new ${finding.edge_type} dependency edge ${finding.parent_key} -> ${finding.child_key} via ${finding.path.join(' > ')} compared with baseline ${previousRecord.created_at}`,
+    reason: finding.reason,
   }))
 }
 
@@ -286,16 +295,18 @@ function formatEdgeId(edge: DependencyGraphEdge): string {
 
 function buildScanReviewRecord({
   result,
+  baselineIdentity,
   dependencyEdges,
   baselineKey,
   baselineRecordId,
-  newDependencyEdgeFindings,
+  edgeFindings,
 }: {
   result: ScanResult
+  baselineIdentity: BaselineIdentity
   dependencyEdges: DependencyGraphEdge[]
   baselineKey: string
   baselineRecordId: string | null
-  newDependencyEdgeFindings: NewDependencyEdgeFinding[]
+  edgeFindings: EdgeFinding[]
 }): ScanReviewRecord {
   const pkg = {
     name: result.root.name,
@@ -308,6 +319,7 @@ function buildScanReviewRecord({
     package: pkg,
     package_key: packageKey(pkg),
     scan_target: result.scan_target,
+    baseline_identity: baselineIdentity,
     baseline_key: baselineKey,
     baseline_record_id: baselineRecordId,
     requested_depth: result.requested_depth,
@@ -322,7 +334,7 @@ function buildScanReviewRecord({
     safe_count: result.safe_count,
     scan_duration_ms: result.scan_duration_ms,
     dependency_edges: dependencyEdges,
-    new_dependency_edge_findings: newDependencyEdgeFindings,
+    edge_findings: edgeFindings,
   }
 }
 

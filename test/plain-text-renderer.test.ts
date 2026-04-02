@@ -2,13 +2,21 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import type { ScanResult } from '../src/domain/entities.js'
-import { renderJson } from '../src/interface/json-renderer.js'
+import { renderPlainText } from '../src/interface/plain-text-renderer.js'
+
+test('plain text renderer surfaces changed edges before package findings', () => {
+  const output = renderPlainText(createResult())
+
+  assert.match(output, /Changed edges:/)
+  assert.match(output, /root@1\.0\.0 -> child@1\.0\.0 \[direct\] via root@1\.0\.0 > child@1\.0\.0/)
+  assert.match(output, /Findings:/)
+})
 
 function createResult(): ScanResult {
   return {
     record_id: '2026-04-01T00:00:00.000Z:root@1.0.0:depth=3',
     scan_target: 'root',
-    baseline_record_id: null,
+    baseline_record_id: 'baseline-record',
     requested_depth: 3,
     threshold: 0.4,
     root: {
@@ -28,10 +36,17 @@ function createResult(): ScanResult {
       dependency_count: 1,
       publish_events_last_30_days: 1,
       has_advisories: false,
-      risk_score: 0.1,
-      risk_level: 'safe',
-      signals: [],
-      recommendation: 'install',
+      risk_score: 0.64,
+      risk_level: 'review',
+      signals: [
+        {
+          type: 'new_direct_dependency_edge',
+          value: 'root@1.0.0->child@1.0.0',
+          weight: 'high',
+          reason: 'new direct dependency edge root@1.0.0 -> child@1.0.0',
+        },
+      ],
+      recommendation: 'review',
       dependencies: [],
     },
     edge_findings: [
@@ -53,19 +68,11 @@ function createResult(): ScanResult {
     ],
     findings: [],
     total_scanned: 1,
-    suspicious_count: 0,
-    safe_count: 1,
-    overall_risk_score: 0.1,
-    overall_risk_level: 'safe',
+    suspicious_count: 1,
+    safe_count: 0,
+    overall_risk_score: 0.64,
+    overall_risk_level: 'review',
     scan_duration_ms: 0,
     timestamp: '2026-04-01T00:00:00.000Z',
   }
 }
-
-test('JSON renderer emits deterministic JSON', () => {
-  const first = renderJson(createResult())
-  const second = renderJson(createResult())
-
-  assert.equal(first, second)
-  assert.doesNotThrow(() => JSON.parse(first))
-})

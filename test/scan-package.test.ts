@@ -3,7 +3,9 @@ import test from 'node:test'
 
 import { createScanPackageUseCase } from '../src/application/scan-package.js'
 import type {
+  BaselineIdentity,
   DependencyGraphEdge,
+  EdgeFinding,
   PackageMetadata,
   ReviewEvent,
   ScanReviewRecord,
@@ -64,7 +66,7 @@ class InMemoryReviewStore implements ScanReviewStore {
     this.records.push(record)
   }
 
-  async findLatestScanByBaseline(baselineKey: string): Promise<ScanReviewRecord | null> {
+  async findLatestScanByBaseline(baselineIdentity: BaselineIdentity): Promise<ScanReviewRecord | null> {
     if (this.failLookup) {
       throw new Error('history unavailable')
     }
@@ -72,7 +74,11 @@ class InMemoryReviewStore implements ScanReviewStore {
     for (let index = this.records.length - 1; index >= 0; index -= 1) {
       const record = this.records[index]
 
-      if (record?.baseline_key === baselineKey) {
+      if (
+        record?.baseline_identity.scan_target === baselineIdentity.scan_target &&
+        record.baseline_identity.requested_depth === baselineIdentity.requested_depth &&
+        record.baseline_identity.workspace_identity === baselineIdentity.workspace_identity
+      ) {
         return record
       }
     }
@@ -195,6 +201,7 @@ test('scan use case orders findings by depth, score, then lexical key', async ()
   )
   assert.equal(result.suspicious_count, 3)
   assert.equal(result.safe_count, 1)
+  assert.deepEqual(result.edge_findings, [])
   assert.equal(reviewStore.records.length, 1)
 })
 
@@ -254,6 +261,7 @@ test('threshold changes suspicious classification without changing raw scores', 
   assert.equal(stricterThreshold.findings.length, 0)
   assert.equal(reviewThreshold.root.dependencies[0]?.risk_score, 0.5)
   assert.equal(stricterThreshold.root.dependencies[0]?.risk_score, 0.5)
+  assert.deepEqual(reviewThreshold.edge_findings, [])
 })
 
 test('scan use case persists a durable scan review record after the scan completes', async () => {
@@ -309,7 +317,12 @@ test('scan use case persists a durable scan review record after the scan complet
     package: { name: 'root', version: '1.0.0' },
     package_key: 'root@1.0.0',
     scan_target: 'root',
-    baseline_key: 'root::depth=3',
+    baseline_identity: {
+      scan_target: 'root',
+      requested_depth: 3,
+      workspace_identity: 'local',
+    },
+    baseline_key: 'root::depth=3::workspace=local',
     baseline_record_id: null,
     requested_depth: 3,
     threshold: 0.4,
@@ -407,7 +420,7 @@ test('scan use case persists a durable scan review record after the scan complet
         child_depth: 1,
       },
     ],
-    new_dependency_edge_findings: [],
+    edge_findings: [],
   })
 })
 
@@ -431,8 +444,9 @@ test('dependency graph delta is omitted when there is no prior scan', async () =
   })
 
   assert.equal(result.root.signals.length, 0)
+  assert.deepEqual(result.edge_findings, [])
   assert.deepEqual(reviewStore.records[0]?.signals, [])
-  assert.deepEqual(reviewStore.records[0]?.new_dependency_edge_findings, [])
+  assert.deepEqual(reviewStore.records[0]?.edge_findings, [])
 })
 
 test('dependency graph delta is omitted when the prior scan has identical edges', async () => {
@@ -461,8 +475,9 @@ test('dependency graph delta is omitted when the prior scan has identical edges'
   })
 
   assert.equal(result.root.signals.length, 0)
+  assert.deepEqual(result.edge_findings, [])
   assert.deepEqual(reviewStore.records.at(-1)?.signals, [])
-  assert.deepEqual(reviewStore.records.at(-1)?.new_dependency_edge_findings, [])
+  assert.deepEqual(reviewStore.records.at(-1)?.edge_findings, [])
 })
 
 test('dependency graph delta records newly introduced edges against the latest prior scan', async () => {
@@ -540,15 +555,17 @@ test('dependency graph delta records newly introduced edges against the latest p
     /child@1\.0\.0 -> grandchild@1\.0\.0/,
   )
   assert.deepEqual(reviewStore.records.at(-1)?.signals, result.root.signals)
-  assert.deepEqual(reviewStore.records.at(-1)?.new_dependency_edge_findings, [
-    {
-      parent_key: 'child@1.0.0',
-      child_key: 'grandchild@1.0.0',
+  assert.deepEqual(result.edge_findings, [
+    createEdgeFinding({
+      parentKey: 'child@1.0.0',
+      childKey: 'grandchild@1.0.0',
       path: ['root@1.0.0', 'child@1.0.0', 'grandchild@1.0.0'],
       depth: 2,
-      edge_type: 'transitive',
-    },
+      edgeType: 'transitive',
+      baselineRecordId: '2026-03-31T00:00:00.000Z:root@1.0.0:depth=3',
+    }),
   ])
+  assert.deepEqual(reviewStore.records.at(-1)?.edge_findings, result.edge_findings)
 })
 
 test('dependency graph delta lookup degrades gracefully when history lookup fails', async () => {
@@ -574,6 +591,35 @@ test('dependency graph delta lookup degrades gracefully when history lookup fail
 
   assert.equal(result.root.signals.length, 0)
   assert.equal(reviewStore.records.length, 1)
+})
+
+test('baseline identity requires matching workspace identity before applying delta', async () => {
+  const reviewStore = new InMemoryReviewStore([
+    createStoredRecord({
+      dependencyEdges: [],
+      workspaceIdentity: '/tmp/other-workspace',
+    }),
+  ])
+  const scanPackage = createScanPackageUseCase({
+    traverser: new StubTraverser(createLinearGraph()),
+    scorer: new StubScorer({
+      'root@1.0.0': 0.1,
+      'child@1.0.0': 0,
+    }),
+    reviewStore,
+    now: () => new Date('2026-04-01T00:00:00.000Z'),
+  })
+
+  const result = await scanPackage({
+    package_spec: 'root',
+    max_depth: 3,
+    threshold: 0.4,
+    verbose: false,
+    workspace_identity: '/tmp/current-workspace',
+  })
+
+  assert.equal(result.baseline_record_id, null)
+  assert.deepEqual(result.edge_findings, [])
 })
 
 function createLinearGraph(): TraversedDependencyGraph {
@@ -609,8 +655,10 @@ function createLinearGraph(): TraversedDependencyGraph {
 
 function createStoredRecord({
   dependencyEdges,
+  workspaceIdentity = 'local',
 }: {
   dependencyEdges: DependencyGraphEdge[]
+  workspaceIdentity?: string
 }): ScanReviewRecord {
   const root = createStoredPackageNode()
 
@@ -620,7 +668,12 @@ function createStoredRecord({
     package: { name: 'root', version: '1.0.0' },
     package_key: 'root@1.0.0',
     scan_target: 'root',
-    baseline_key: 'root::depth=3',
+    baseline_identity: {
+      scan_target: 'root',
+      requested_depth: 3,
+      workspace_identity: workspaceIdentity,
+    },
+    baseline_key: `root::depth=3::workspace=${workspaceIdentity}`,
     baseline_record_id: null,
     requested_depth: 3,
     threshold: 0.4,
@@ -634,7 +687,39 @@ function createStoredRecord({
     safe_count: 2,
     scan_duration_ms: 0,
     dependency_edges: dependencyEdges,
-    new_dependency_edge_findings: [],
+    edge_findings: [],
+  }
+}
+
+function createEdgeFinding({
+  parentKey,
+  childKey,
+  path,
+  depth,
+  edgeType,
+  baselineRecordId,
+}: {
+  parentKey: string
+  childKey: string
+  path: string[]
+  depth: number
+  edgeType: 'direct' | 'transitive'
+  baselineRecordId: string
+}): EdgeFinding {
+  return {
+    parent_key: parentKey,
+    child_key: childKey,
+    path,
+    depth,
+    edge_type: edgeType,
+    baseline_record_id: baselineRecordId,
+    baseline_identity: {
+      scan_target: 'root',
+      requested_depth: 3,
+      workspace_identity: 'local',
+    },
+    reason: `new ${edgeType} dependency edge ${parentKey} -> ${childKey} via ${path.join(' > ')} compared with baseline 2026-03-31T00:00:00.000Z`,
+    recommendation: 'review',
   }
 }
 

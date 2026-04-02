@@ -1,4 +1,4 @@
-import type { PackageSpec, ResolvedPackage } from './contracts.js'
+import type { BaselineIdentity, PackageSpec, ResolvedPackage } from './contracts.js'
 import type { Recommendation, RiskLevel, RiskSignal } from './entities.js'
 import { InvalidUsageError } from './errors.js'
 
@@ -88,8 +88,20 @@ export function normalizeScanTarget(input: string): string {
   return parsed.version_range === undefined ? parsed.name : `${parsed.name}@${parsed.version_range}`
 }
 
-export function baselineKeyForScan(scanTarget: string, requestedDepth: number): string {
-  return `${scanTarget}::depth=${requestedDepth}`
+export function baselineIdentityForScan(
+  scanTarget: string,
+  requestedDepth: number,
+  workspaceIdentity = 'local',
+): BaselineIdentity {
+  return {
+    scan_target: scanTarget,
+    requested_depth: requestedDepth,
+    workspace_identity: workspaceIdentity.trim().length > 0 ? workspaceIdentity : 'local',
+  }
+}
+
+export function baselineKeyForIdentity(identity: BaselineIdentity): string {
+  return `${identity.scan_target}::depth=${identity.requested_depth}::workspace=${identity.workspace_identity}`
 }
 
 export function parsePackageKey(input: string): ResolvedPackage {

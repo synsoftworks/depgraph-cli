@@ -1,4 +1,4 @@
-import type { DependencyPath } from './contracts.js'
+import type { DependencyPath, EdgeFinding } from './contracts.js'
 
 export type RiskLevel = 'safe' | 'review' | 'critical'
 export type Recommendation = 'install' | 'review' | 'do_not_install'
@@ -57,6 +57,7 @@ export interface ScanResult {
   requested_depth: number
   threshold: number
   root: PackageNode
+  edge_findings: EdgeFinding[]
   findings: ScanFinding[]
   total_scanned: number
   suspicious_count: number
