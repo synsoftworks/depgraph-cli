@@ -8,13 +8,46 @@ test('evaluation renderer surfaces raw events and derived canonical labels', () 
   const summary = createSummary()
   const plainText = renderEvaluationPlainText(summary)
   const json = renderEvaluationJson(summary)
+  const parsed = JSON.parse(json)
 
   assert.match(plainText, /Raw review events:/)
   assert.match(plainText, /Canonical labels \(derived from latest_label_bearing_event\):/)
   assert.match(plainText, /- total: 3/)
   assert.match(plainText, /- labeled records: 2/)
   assert.match(plainText, /Workflow status:/)
-  assert.deepEqual(JSON.parse(json), summary)
+  assert.deepEqual(Object.keys(parsed), [
+    'total_scans',
+    'raw_review_events',
+    'canonical_labels',
+    'workflow_status',
+    'signal_frequency',
+    'metadata_coverage',
+  ])
+  assert.deepEqual(Object.keys(parsed.raw_review_events), [
+    'total_events',
+    'malicious_events',
+    'benign_events',
+    'needs_review_events',
+  ])
+  assert.deepEqual(Object.keys(parsed.canonical_labels), [
+    'total_labeled_records',
+    'malicious_records',
+    'benign_records',
+    'unlabeled_records',
+    'derived_from',
+  ])
+  assert.deepEqual(Object.keys(parsed.workflow_status), [
+    'unreviewed_records',
+    'needs_review_records',
+    'resolved_records',
+  ])
+  assert.deepEqual(Object.keys(parsed.metadata_coverage), [
+    'weekly_downloads',
+    'dependents_count',
+    'signal_frequency_by_weekly_downloads',
+    'signal_frequency_by_dependents_count',
+  ])
+  assert.deepEqual(parsed, summary)
 })
 
 function createSummary(): EvaluationSummary {

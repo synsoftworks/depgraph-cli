@@ -51,21 +51,104 @@ function createResult(): ScanResult {
         recommendation: 'review',
       },
     ],
-    findings: [],
+    findings: [
+      {
+        key: 'child@1.0.0',
+        name: 'child',
+        version: '1.0.0',
+        depth: 1,
+        path: {
+          packages: [
+            { name: 'root', version: '1.0.0' },
+            { name: 'child', version: '1.0.0' },
+          ],
+        },
+        risk_score: 0.48,
+        risk_level: 'review',
+        recommendation: 'review',
+        signals: [
+          {
+            type: 'test_signal',
+            value: 0.48,
+            weight: 'medium',
+            reason: 'score 0.48',
+          },
+        ],
+        explanation: 'score 0.48',
+      },
+    ],
     total_scanned: 1,
-    suspicious_count: 0,
-    safe_count: 1,
-    overall_risk_score: 0.1,
-    overall_risk_level: 'safe',
+    suspicious_count: 1,
+    safe_count: 0,
+    overall_risk_score: 0.48,
+    overall_risk_level: 'review',
     scan_duration_ms: 0,
     timestamp: '2026-04-01T00:00:00.000Z',
   }
 }
 
-test('JSON renderer emits deterministic JSON', () => {
+test('scan JSON contract remains stable and deterministic', () => {
   const first = renderJson(createResult())
   const second = renderJson(createResult())
+  const parsed = JSON.parse(first)
 
   assert.equal(first, second)
   assert.doesNotThrow(() => JSON.parse(first))
+  assert.deepEqual(Object.keys(parsed), [
+    'record_id',
+    'scan_target',
+    'baseline_record_id',
+    'requested_depth',
+    'threshold',
+    'root',
+    'edge_findings',
+    'findings',
+    'total_scanned',
+    'suspicious_count',
+    'safe_count',
+    'overall_risk_score',
+    'overall_risk_level',
+    'scan_duration_ms',
+    'timestamp',
+  ])
+  assert.deepEqual(Object.keys(parsed.edge_findings[0]), [
+    'parent_key',
+    'child_key',
+    'path',
+    'depth',
+    'edge_type',
+    'baseline_record_id',
+    'baseline_identity',
+    'reason',
+    'recommendation',
+  ])
+  assert.deepEqual(Object.keys(parsed.findings[0]), [
+    'key',
+    'name',
+    'version',
+    'depth',
+    'path',
+    'risk_score',
+    'risk_level',
+    'recommendation',
+    'signals',
+    'explanation',
+  ])
+  assert.deepEqual(parsed.edge_findings[0], {
+    parent_key: 'root@1.0.0',
+    child_key: 'child@1.0.0',
+    path: ['root@1.0.0', 'child@1.0.0'],
+    depth: 1,
+    edge_type: 'direct',
+    baseline_record_id: 'baseline-record',
+    baseline_identity: {
+      scan_target: 'root',
+      requested_depth: 3,
+      workspace_identity: '/tmp/workspace',
+    },
+    reason: 'new direct dependency edge root@1.0.0 -> child@1.0.0',
+    recommendation: 'review',
+  })
+  assert.equal(parsed.findings[0].key, 'child@1.0.0')
+  assert.equal(parsed.findings[0].signals[0].type, 'test_signal')
 })
