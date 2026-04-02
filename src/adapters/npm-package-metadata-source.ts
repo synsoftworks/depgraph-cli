@@ -31,7 +31,10 @@ export class NpmPackageMetadataSource implements PackageMetadataSource {
   constructor(private readonly fetcher: typeof fetch = fetch) {}
 
   async resolvePackage(spec: PackageSpec): Promise<PackageMetadata> {
-    const packument = await this.fetchPackument(spec.name)
+    const [packument, weeklyDownloadsCandidate] = await Promise.all([
+      this.fetchPackument(spec.name),
+      this.fetchWeeklyDownloads(spec.name).catch(() => null),
+    ])
     const version = this.resolveVersion(packument, spec)
     const manifest = packument.versions?.[version]
 
@@ -44,7 +47,7 @@ export class NpmPackageMetadataSource implements PackageMetadataSource {
     const publishEventsLast30Days = this.countRecentPublishes(versionTimes, 30)
     const deprecatedMessage = manifest.deprecated ?? null
     const isSecurityTombstone = this.isSecurityTombstone(spec.name, version, deprecatedMessage)
-    const weeklyDownloads = isSecurityTombstone ? null : await this.fetchWeeklyDownloads(spec.name)
+    const weeklyDownloads = isSecurityTombstone ? null : weeklyDownloadsCandidate
 
     return {
       package: {
