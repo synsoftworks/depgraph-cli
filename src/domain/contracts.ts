@@ -1,4 +1,12 @@
-import type { Recommendation, RiskLevel, RiskSignal } from './entities.js'
+import type {
+  PackageNode,
+  Recommendation,
+  ReviewOutcome,
+  ReviewSource,
+  RiskLevel,
+  RiskSignal,
+  ScanFinding,
+} from './entities.js'
 
 export interface PackageSpec {
   name: string
@@ -42,4 +50,75 @@ export interface RiskAssessment {
   risk_level: RiskLevel
   recommendation: Recommendation
   signals: RiskSignal[]
+}
+
+export interface DependencyGraphEdge {
+  from: string
+  to: string
+  child_depth: number
+}
+
+export interface NewDependencyEdgeFinding {
+  parent_key: string
+  child_key: string
+  path: string[]
+  depth: number
+  edge_type: 'direct' | 'transitive'
+}
+
+export interface ScanReviewRecord {
+  record_id: string
+  created_at: string
+  package: ResolvedPackage
+  package_key: string
+  scan_target: string
+  baseline_key: string
+  baseline_record_id: string | null
+  requested_depth: number
+  threshold: number
+  raw_score: number
+  risk_level: RiskLevel
+  signals: RiskSignal[]
+  findings: ScanFinding[]
+  root: PackageNode
+  total_scanned: number
+  suspicious_count: number
+  safe_count: number
+  scan_duration_ms: number
+  dependency_edges: DependencyGraphEdge[]
+  new_dependency_edge_findings: NewDependencyEdgeFinding[]
+}
+
+export interface ReviewScanRequest {
+  record_id: string
+  outcome: ReviewOutcome
+  notes: string | null
+  review_source: ReviewSource
+  confidence: number | null
+}
+
+export interface ReviewEvent {
+  event_id: string
+  record_id: string
+  package_key: string
+  created_at: string
+  outcome: ReviewOutcome
+  notes: string | null
+  resolution_timestamp: string | null
+  review_source: ReviewSource
+  confidence: number | null
+}
+
+export interface SignalFrequency {
+  type: string
+  count: number
+}
+
+export interface EvaluationSummary {
+  total_scans: number
+  labeled_records: number
+  malicious_count: number
+  benign_count: number
+  needs_review_count: number
+  signal_frequency: SignalFrequency[]
 }

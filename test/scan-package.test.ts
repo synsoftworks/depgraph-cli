@@ -2,10 +2,17 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import { createScanPackageUseCase } from '../src/application/scan-package.js'
-import type { PackageMetadata } from '../src/domain/contracts.js'
+import type {
+  DependencyGraphEdge,
+  PackageMetadata,
+  ReviewEvent,
+  ScanReviewRecord,
+} from '../src/domain/contracts.js'
+import type { PackageNode } from '../src/domain/entities.js'
 import type {
   DependencyTraverser,
   RiskScorer,
+  ScanReviewStore,
   TraversedDependencyGraph,
 } from '../src/domain/ports.js'
 
@@ -44,6 +51,52 @@ class StubScorer implements RiskScorer {
   }
 }
 
+class InMemoryReviewStore implements ScanReviewStore {
+  records: ScanReviewRecord[]
+  reviewEvents: ReviewEvent[] = []
+  failLookup = false
+
+  constructor(initialRecords: ScanReviewRecord[] = []) {
+    this.records = [...initialRecords]
+  }
+
+  async appendScanRecord(record: ScanReviewRecord): Promise<void> {
+    this.records.push(record)
+  }
+
+  async findLatestScanByBaseline(baselineKey: string): Promise<ScanReviewRecord | null> {
+    if (this.failLookup) {
+      throw new Error('history unavailable')
+    }
+
+    for (let index = this.records.length - 1; index >= 0; index -= 1) {
+      const record = this.records[index]
+
+      if (record?.baseline_key === baselineKey) {
+        return record
+      }
+    }
+
+    return null
+  }
+
+  async findScanRecord(recordId: string): Promise<ScanReviewRecord | null> {
+    return this.records.find((record) => record.record_id === recordId) ?? null
+  }
+
+  async appendReviewEvent(event: ReviewEvent): Promise<void> {
+    this.reviewEvents.push(event)
+  }
+
+  async listScanRecords(): Promise<ScanReviewRecord[]> {
+    return this.records
+  }
+
+  async listReviewEvents(): Promise<ReviewEvent[]> {
+    return this.reviewEvents
+  }
+}
+
 function createMetadata(name: string, version: string): PackageMetadata {
   return {
     package: { name, version },
@@ -62,6 +115,7 @@ function createMetadata(name: string, version: string): PackageMetadata {
 }
 
 test('scan use case orders findings by depth, score, then lexical key', async () => {
+  const reviewStore = new InMemoryReviewStore()
   const scanPackage = createScanPackageUseCase({
     traverser: new StubTraverser({
       root_key: 'root@1.0.0',
@@ -124,6 +178,7 @@ test('scan use case orders findings by depth, score, then lexical key', async ()
       'beta@1.0.0': 0.8,
       'gamma@1.0.0': 0.9,
     }),
+    reviewStore,
     now: () => new Date('2026-04-01T00:00:00.000Z'),
   })
 
@@ -140,9 +195,11 @@ test('scan use case orders findings by depth, score, then lexical key', async ()
   )
   assert.equal(result.suspicious_count, 3)
   assert.equal(result.safe_count, 1)
+  assert.equal(reviewStore.records.length, 1)
 })
 
 test('threshold changes suspicious classification without changing raw scores', async () => {
+  const reviewStore = new InMemoryReviewStore()
   const scanPackage = createScanPackageUseCase({
     traverser: new StubTraverser({
       root_key: 'root@1.0.0',
@@ -176,6 +233,7 @@ test('threshold changes suspicious classification without changing raw scores', 
       'root@1.0.0': 0.1,
       'child@1.0.0': 0.5,
     }),
+    reviewStore,
     now: () => new Date('2026-04-01T00:00:00.000Z'),
   })
 
@@ -197,3 +255,411 @@ test('threshold changes suspicious classification without changing raw scores', 
   assert.equal(reviewThreshold.root.dependencies[0]?.risk_score, 0.5)
   assert.equal(stricterThreshold.root.dependencies[0]?.risk_score, 0.5)
 })
+
+test('scan use case persists a durable scan review record after the scan completes', async () => {
+  const reviewStore = new InMemoryReviewStore()
+  const scanPackage = createScanPackageUseCase({
+    traverser: new StubTraverser({
+      root_key: 'root@1.0.0',
+      nodes: [
+        {
+          key: 'root@1.0.0',
+          package: { name: 'root', version: '1.0.0' },
+          metadata: createMetadata('root', '1.0.0'),
+          depth: 0,
+          parent_key: null,
+          path: {
+            packages: [{ name: 'root', version: '1.0.0' }],
+          },
+        },
+        {
+          key: 'child@1.0.0',
+          package: { name: 'child', version: '1.0.0' },
+          metadata: createMetadata('child', '1.0.0'),
+          depth: 1,
+          parent_key: 'root@1.0.0',
+          path: {
+            packages: [
+              { name: 'root', version: '1.0.0' },
+              { name: 'child', version: '1.0.0' },
+            ],
+          },
+        },
+      ],
+    }),
+    scorer: new StubScorer({
+      'root@1.0.0': 0.1,
+      'child@1.0.0': 0.8,
+    }),
+    reviewStore,
+    now: () => new Date('2026-04-01T00:00:00.000Z'),
+  })
+
+  await scanPackage({
+    package_spec: 'root',
+    max_depth: 3,
+    threshold: 0.4,
+    verbose: false,
+  })
+
+  assert.equal(reviewStore.records.length, 1)
+  assert.deepEqual(reviewStore.records[0], {
+    record_id: '2026-04-01T00:00:00.000Z:root@1.0.0:depth=3',
+    created_at: '2026-04-01T00:00:00.000Z',
+    package: { name: 'root', version: '1.0.0' },
+    package_key: 'root@1.0.0',
+    scan_target: 'root',
+    baseline_key: 'root::depth=3',
+    baseline_record_id: null,
+    requested_depth: 3,
+    threshold: 0.4,
+    raw_score: 0.8,
+    risk_level: 'critical',
+    signals: [],
+    findings: [
+      {
+        key: 'child@1.0.0',
+        name: 'child',
+        version: '1.0.0',
+        depth: 1,
+        path: {
+          packages: [
+            { name: 'root', version: '1.0.0' },
+            { name: 'child', version: '1.0.0' },
+          ],
+        },
+        risk_score: 0.8,
+        risk_level: 'critical',
+        recommendation: 'do_not_install',
+        signals: [
+          {
+            type: 'test_signal',
+            value: 0.8,
+            weight: 'medium',
+            reason: 'score 0.8',
+          },
+        ],
+        explanation: 'score 0.8',
+      },
+    ],
+    root: {
+      name: 'root',
+      version: '1.0.0',
+      key: 'root@1.0.0',
+      depth: 0,
+      age_days: 31,
+      weekly_downloads: 1000,
+      dependents_count: null,
+      deprecated_message: null,
+      is_security_tombstone: false,
+      published_at: '2026-03-01T00:00:00.000Z',
+      first_published: '2026-01-01T00:00:00.000Z',
+      last_published: '2026-03-01T00:00:00.000Z',
+      total_versions: 3,
+      dependency_count: 0,
+      publish_events_last_30_days: 1,
+      has_advisories: false,
+      risk_score: 0.1,
+      risk_level: 'safe',
+      signals: [],
+      recommendation: 'install',
+      dependencies: [
+        {
+          name: 'child',
+          version: '1.0.0',
+          key: 'child@1.0.0',
+          depth: 1,
+          age_days: 31,
+          weekly_downloads: 1000,
+          dependents_count: null,
+          deprecated_message: null,
+          is_security_tombstone: false,
+          published_at: '2026-03-01T00:00:00.000Z',
+          first_published: '2026-01-01T00:00:00.000Z',
+          last_published: '2026-03-01T00:00:00.000Z',
+          total_versions: 3,
+          dependency_count: 0,
+          publish_events_last_30_days: 1,
+          has_advisories: false,
+          risk_score: 0.8,
+          risk_level: 'critical',
+          signals: [
+            {
+              type: 'test_signal',
+              value: 0.8,
+              weight: 'medium',
+              reason: 'score 0.8',
+            },
+          ],
+          recommendation: 'do_not_install',
+          dependencies: [],
+        },
+      ],
+    },
+    total_scanned: 2,
+    suspicious_count: 1,
+    safe_count: 1,
+    scan_duration_ms: 0,
+    dependency_edges: [
+      {
+        from: 'root@1.0.0',
+        to: 'child@1.0.0',
+        child_depth: 1,
+      },
+    ],
+    new_dependency_edge_findings: [],
+  })
+})
+
+test('dependency graph delta is omitted when there is no prior scan', async () => {
+  const reviewStore = new InMemoryReviewStore()
+  const scanPackage = createScanPackageUseCase({
+    traverser: new StubTraverser(createLinearGraph()),
+    scorer: new StubScorer({
+      'root@1.0.0': 0.1,
+      'child@1.0.0': 0,
+    }),
+    reviewStore,
+    now: () => new Date('2026-04-01T00:00:00.000Z'),
+  })
+
+  const result = await scanPackage({
+    package_spec: 'root',
+    max_depth: 3,
+    threshold: 0.4,
+    verbose: false,
+  })
+
+  assert.equal(result.root.signals.length, 0)
+  assert.deepEqual(reviewStore.records[0]?.signals, [])
+  assert.deepEqual(reviewStore.records[0]?.new_dependency_edge_findings, [])
+})
+
+test('dependency graph delta is omitted when the prior scan has identical edges', async () => {
+  const reviewStore = new InMemoryReviewStore([
+    createStoredRecord({
+      dependencyEdges: [
+        { from: 'root@1.0.0', to: 'child@1.0.0', child_depth: 1 },
+      ],
+    }),
+  ])
+  const scanPackage = createScanPackageUseCase({
+    traverser: new StubTraverser(createLinearGraph()),
+    scorer: new StubScorer({
+      'root@1.0.0': 0.1,
+      'child@1.0.0': 0,
+    }),
+    reviewStore,
+    now: () => new Date('2026-04-01T00:00:00.000Z'),
+  })
+
+  const result = await scanPackage({
+    package_spec: 'root',
+    max_depth: 3,
+    threshold: 0.4,
+    verbose: false,
+  })
+
+  assert.equal(result.root.signals.length, 0)
+  assert.deepEqual(reviewStore.records.at(-1)?.signals, [])
+  assert.deepEqual(reviewStore.records.at(-1)?.new_dependency_edge_findings, [])
+})
+
+test('dependency graph delta records newly introduced edges against the latest prior scan', async () => {
+  const reviewStore = new InMemoryReviewStore([
+    createStoredRecord({
+      dependencyEdges: [
+        { from: 'root@1.0.0', to: 'child@1.0.0', child_depth: 1 },
+      ],
+    }),
+  ])
+  const scanPackage = createScanPackageUseCase({
+    traverser: new StubTraverser({
+      root_key: 'root@1.0.0',
+      nodes: [
+        {
+          key: 'root@1.0.0',
+          package: { name: 'root', version: '1.0.0' },
+          metadata: createMetadata('root', '1.0.0'),
+          depth: 0,
+          parent_key: null,
+          path: {
+            packages: [{ name: 'root', version: '1.0.0' }],
+          },
+        },
+        {
+          key: 'child@1.0.0',
+          package: { name: 'child', version: '1.0.0' },
+          metadata: createMetadata('child', '1.0.0'),
+          depth: 1,
+          parent_key: 'root@1.0.0',
+          path: {
+            packages: [
+              { name: 'root', version: '1.0.0' },
+              { name: 'child', version: '1.0.0' },
+            ],
+          },
+        },
+        {
+          key: 'grandchild@1.0.0',
+          package: { name: 'grandchild', version: '1.0.0' },
+          metadata: createMetadata('grandchild', '1.0.0'),
+          depth: 2,
+          parent_key: 'child@1.0.0',
+          path: {
+            packages: [
+              { name: 'root', version: '1.0.0' },
+              { name: 'child', version: '1.0.0' },
+              { name: 'grandchild', version: '1.0.0' },
+            ],
+          },
+        },
+      ],
+    }),
+    scorer: new StubScorer({
+      'root@1.0.0': 0.1,
+      'child@1.0.0': 0,
+      'grandchild@1.0.0': 0,
+    }),
+    reviewStore,
+    now: () => new Date('2026-04-02T00:00:00.000Z'),
+  })
+
+  const result = await scanPackage({
+    package_spec: 'root',
+    max_depth: 3,
+    threshold: 0.4,
+    verbose: false,
+  })
+
+  assert.equal(result.root.signals.length, 1)
+  assert.equal(result.root.signals[0]?.type, 'new_transitive_dependency_edge')
+  assert.equal(result.root.signals[0]?.value, 'child@1.0.0->grandchild@1.0.0')
+  assert.match(
+    result.root.signals[0]?.reason ?? '',
+    /child@1\.0\.0 -> grandchild@1\.0\.0/,
+  )
+  assert.deepEqual(reviewStore.records.at(-1)?.signals, result.root.signals)
+  assert.deepEqual(reviewStore.records.at(-1)?.new_dependency_edge_findings, [
+    {
+      parent_key: 'child@1.0.0',
+      child_key: 'grandchild@1.0.0',
+      path: ['root@1.0.0', 'child@1.0.0', 'grandchild@1.0.0'],
+      depth: 2,
+      edge_type: 'transitive',
+    },
+  ])
+})
+
+test('dependency graph delta lookup degrades gracefully when history lookup fails', async () => {
+  const reviewStore = new InMemoryReviewStore()
+  reviewStore.failLookup = true
+
+  const scanPackage = createScanPackageUseCase({
+    traverser: new StubTraverser(createLinearGraph()),
+    scorer: new StubScorer({
+      'root@1.0.0': 0.1,
+      'child@1.0.0': 0,
+    }),
+    reviewStore,
+    now: () => new Date('2026-04-01T00:00:00.000Z'),
+  })
+
+  const result = await scanPackage({
+    package_spec: 'root',
+    max_depth: 3,
+    threshold: 0.4,
+    verbose: false,
+  })
+
+  assert.equal(result.root.signals.length, 0)
+  assert.equal(reviewStore.records.length, 1)
+})
+
+function createLinearGraph(): TraversedDependencyGraph {
+  return {
+    root_key: 'root@1.0.0',
+    nodes: [
+      {
+        key: 'root@1.0.0',
+        package: { name: 'root', version: '1.0.0' },
+        metadata: createMetadata('root', '1.0.0'),
+        depth: 0,
+        parent_key: null,
+        path: {
+          packages: [{ name: 'root', version: '1.0.0' }],
+        },
+      },
+      {
+        key: 'child@1.0.0',
+        package: { name: 'child', version: '1.0.0' },
+        metadata: createMetadata('child', '1.0.0'),
+        depth: 1,
+        parent_key: 'root@1.0.0',
+        path: {
+          packages: [
+            { name: 'root', version: '1.0.0' },
+            { name: 'child', version: '1.0.0' },
+          ],
+        },
+      },
+    ],
+  }
+}
+
+function createStoredRecord({
+  dependencyEdges,
+}: {
+  dependencyEdges: DependencyGraphEdge[]
+}): ScanReviewRecord {
+  const root = createStoredPackageNode()
+
+  return {
+    record_id: '2026-03-31T00:00:00.000Z:root@1.0.0:depth=3',
+    created_at: '2026-03-31T00:00:00.000Z',
+    package: { name: 'root', version: '1.0.0' },
+    package_key: 'root@1.0.0',
+    scan_target: 'root',
+    baseline_key: 'root::depth=3',
+    baseline_record_id: null,
+    requested_depth: 3,
+    threshold: 0.4,
+    raw_score: 0.1,
+    risk_level: 'safe',
+    signals: [],
+    findings: [],
+    root,
+    total_scanned: 2,
+    suspicious_count: 0,
+    safe_count: 2,
+    scan_duration_ms: 0,
+    dependency_edges: dependencyEdges,
+    new_dependency_edge_findings: [],
+  }
+}
+
+function createStoredPackageNode(): PackageNode {
+  return {
+    name: 'root',
+    version: '1.0.0',
+    key: 'root@1.0.0',
+    depth: 0,
+    age_days: 31,
+    weekly_downloads: 1000,
+    dependents_count: null,
+    deprecated_message: null,
+    is_security_tombstone: false,
+    published_at: '2026-03-01T00:00:00.000Z',
+    first_published: '2026-01-01T00:00:00.000Z',
+    last_published: '2026-03-01T00:00:00.000Z',
+    total_versions: 3,
+    dependency_count: 0,
+    publish_events_last_30_days: 1,
+    has_advisories: false,
+    risk_score: 0.1,
+    risk_level: 'safe',
+    signals: [],
+    recommendation: 'install',
+    dependencies: [],
+  }
+}

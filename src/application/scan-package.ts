@@ -1,48 +1,81 @@
-import type { ScanRequest } from '../domain/contracts.js'
-import type { PackageNode, ScanFinding, ScanResult } from '../domain/entities.js'
+import type {
+  DependencyGraphEdge,
+  NewDependencyEdgeFinding,
+  RiskAssessment,
+  ScanRequest,
+  ScanReviewRecord,
+} from '../domain/contracts.js'
+import type { PackageNode, RiskSignal, ScanFinding, ScanResult } from '../domain/entities.js'
 import { InvalidUsageError } from '../domain/errors.js'
-import type { DependencyTraverser, RiskScorer } from '../domain/ports.js'
+import type {
+  DependencyTraverser,
+  RiskScorer,
+  ScanReviewStore,
+  TraversedDependencyGraph,
+} from '../domain/ports.js'
 import {
+  baselineKeyForScan,
   calculateAgeDays,
   normalizeMaxDepth,
+  normalizeScanTarget,
   normalizeThreshold,
   packageKey,
   parsePackageSpec,
+  recommendationForRiskLevel,
   riskLevelForScore,
+  riskScoreForSignals,
 } from '../domain/value-objects.js'
 
 interface ScanPackageDependencies {
   traverser: DependencyTraverser
   scorer: RiskScorer
+  reviewStore: ScanReviewStore
   now?: () => Date
+}
+
+interface DependencyEdgeSnapshot {
+  edge: DependencyGraphEdge
+  path: string[]
 }
 
 export function createScanPackageUseCase({
   traverser,
   scorer,
+  reviewStore,
   now = () => new Date(),
 }: ScanPackageDependencies) {
   return async function scanPackage(request: ScanRequest): Promise<ScanResult> {
     const startedAt = now()
     const packageSpec = parsePackageSpec(request.package_spec)
+    const scanTarget = normalizeScanTarget(request.package_spec)
     const maxDepth = normalizeMaxDepth(request.max_depth)
     const threshold = normalizeThreshold(request.threshold)
+    const baselineKey = baselineKeyForScan(scanTarget, maxDepth)
     const traversedGraph = await traverser.traverse(packageSpec, maxDepth)
 
     if (traversedGraph.root_key.length === 0 || traversedGraph.nodes.length === 0) {
       throw new InvalidUsageError(`No package graph could be resolved for "${request.package_spec}".`)
     }
 
+    const edgeSnapshots = buildDependencyEdgeSnapshots(traversedGraph)
+    const dependencyEdges = edgeSnapshots.map((snapshot) => snapshot.edge)
+    const previousRecord = await findPreviousRecord(reviewStore, baselineKey)
+    const newDependencyEdgeFindings = buildNewDependencyEdgeFindings(previousRecord, edgeSnapshots)
+    const deltaSignals = buildDeltaSignals(newDependencyEdgeFindings, previousRecord)
     const nodeMap = new Map<string, PackageNode>()
     const findings: ScanFinding[] = []
     let overallRiskScore = 0
 
     for (const traversedNode of traversedGraph.nodes) {
-      const assessment = scorer.assessPackage(traversedNode.metadata, {
+      let assessment = scorer.assessPackage(traversedNode.metadata, {
         depth: traversedNode.depth,
         path: traversedNode.path,
         dependency_count: Object.keys(traversedNode.metadata.dependencies).length,
       })
+
+      if (traversedNode.key === traversedGraph.root_key && deltaSignals.length > 0) {
+        assessment = mergeRiskSignals(assessment, deltaSignals)
+      }
 
       const packageNode: PackageNode = {
         name: traversedNode.package.name,
@@ -103,12 +136,18 @@ export function createScanPackageUseCase({
     findings.sort(compareFindings)
 
     const completedAt = now()
-
-    return {
-      scan_target: request.package_spec,
+    const rootNode = nodeMap.get(traversedGraph.root_key)!
+    const recordId = `${completedAt.toISOString()}:${packageKey({
+      name: rootNode.name,
+      version: rootNode.version,
+    })}:depth=${maxDepth}`
+    const result: ScanResult = {
+      record_id: recordId,
+      scan_target: scanTarget,
+      baseline_record_id: previousRecord?.record_id ?? null,
       requested_depth: maxDepth,
       threshold,
-      root: nodeMap.get(traversedGraph.root_key)!,
+      root: rootNode,
       findings,
       total_scanned: traversedGraph.nodes.length,
       suspicious_count: findings.length,
@@ -118,6 +157,18 @@ export function createScanPackageUseCase({
       scan_duration_ms: Math.max(0, completedAt.getTime() - startedAt.getTime()),
       timestamp: completedAt.toISOString(),
     }
+
+    await reviewStore.appendScanRecord(
+      buildScanReviewRecord({
+        result,
+        dependencyEdges,
+        baselineKey,
+        baselineRecordId: previousRecord?.record_id ?? null,
+        newDependencyEdgeFindings,
+      }),
+    )
+
+    return result
   }
 }
 
@@ -139,6 +190,140 @@ function compareFindings(left: ScanFinding, right: ScanFinding): number {
   }
 
   return left.key.localeCompare(right.key)
+}
+
+async function findPreviousRecord(
+  reviewStore: ScanReviewStore,
+  baselineKey: string,
+): Promise<ScanReviewRecord | null> {
+  try {
+    return await reviewStore.findLatestScanByBaseline(baselineKey)
+  } catch {
+    return null
+  }
+}
+
+function mergeRiskSignals(assessment: RiskAssessment, extraSignals: PackageNode['signals']): RiskAssessment {
+  const signals = [...assessment.signals, ...extraSignals]
+  const riskScore = riskScoreForSignals(signals)
+  const riskLevel = riskLevelForScore(riskScore)
+
+  return {
+    risk_score: riskScore,
+    risk_level: riskLevel,
+    recommendation: recommendationForRiskLevel(riskLevel),
+    signals,
+  }
+}
+
+function buildDependencyEdgeSnapshots(graph: TraversedDependencyGraph): DependencyEdgeSnapshot[] {
+  const snapshots = graph.nodes
+    .filter((node) => node.parent_key !== null)
+    .map((node) => ({
+      edge: {
+        from: node.parent_key!,
+        to: node.key,
+        child_depth: node.depth,
+      },
+      path: node.path.packages.map((pkg) => packageKey(pkg)),
+    }))
+
+  snapshots.sort((left, right) => {
+    if (left.edge.child_depth !== right.edge.child_depth) {
+      return left.edge.child_depth - right.edge.child_depth
+    }
+
+    if (left.edge.from !== right.edge.from) {
+      return left.edge.from.localeCompare(right.edge.from)
+    }
+
+    return left.edge.to.localeCompare(right.edge.to)
+  })
+
+  return snapshots
+}
+
+function buildNewDependencyEdgeFindings(
+  previousRecord: ScanReviewRecord | null,
+  currentEdges: DependencyEdgeSnapshot[],
+): NewDependencyEdgeFinding[] {
+  if (previousRecord === null) {
+    return []
+  }
+
+  const previousEdgeIds = new Set(previousRecord.dependency_edges.map((edge) => formatEdgeId(edge)))
+
+  return currentEdges
+    .filter((snapshot) => !previousEdgeIds.has(formatEdgeId(snapshot.edge)))
+    .map((snapshot) => ({
+      parent_key: snapshot.edge.from,
+      child_key: snapshot.edge.to,
+      path: snapshot.path,
+      depth: snapshot.edge.child_depth,
+      edge_type: snapshot.edge.child_depth === 1 ? 'direct' : 'transitive',
+    }))
+}
+
+function buildDeltaSignals(
+  newEdgeFindings: NewDependencyEdgeFinding[],
+  previousRecord: ScanReviewRecord | null,
+): RiskSignal[] {
+  if (previousRecord === null) {
+    return []
+  }
+
+  return newEdgeFindings.map((finding) => ({
+    type: finding.edge_type === 'direct' ? 'new_direct_dependency_edge' : 'new_transitive_dependency_edge',
+    value: `${finding.parent_key}->${finding.child_key}`,
+    weight: finding.edge_type === 'direct' ? 'high' : 'medium',
+    reason: `new ${finding.edge_type} dependency edge ${finding.parent_key} -> ${finding.child_key} via ${finding.path.join(' > ')} compared with baseline ${previousRecord.created_at}`,
+  }))
+}
+
+function formatEdgeId(edge: DependencyGraphEdge): string {
+  return `${edge.from}->${edge.to}`
+}
+
+function buildScanReviewRecord({
+  result,
+  dependencyEdges,
+  baselineKey,
+  baselineRecordId,
+  newDependencyEdgeFindings,
+}: {
+  result: ScanResult
+  dependencyEdges: DependencyGraphEdge[]
+  baselineKey: string
+  baselineRecordId: string | null
+  newDependencyEdgeFindings: NewDependencyEdgeFinding[]
+}): ScanReviewRecord {
+  const pkg = {
+    name: result.root.name,
+    version: result.root.version,
+  }
+
+  return {
+    record_id: result.record_id,
+    created_at: result.timestamp,
+    package: pkg,
+    package_key: packageKey(pkg),
+    scan_target: result.scan_target,
+    baseline_key: baselineKey,
+    baseline_record_id: baselineRecordId,
+    requested_depth: result.requested_depth,
+    threshold: result.threshold,
+    raw_score: result.overall_risk_score,
+    risk_level: result.overall_risk_level,
+    signals: result.root.signals,
+    findings: result.findings,
+    root: result.root,
+    total_scanned: result.total_scanned,
+    suspicious_count: result.suspicious_count,
+    safe_count: result.safe_count,
+    scan_duration_ms: result.scan_duration_ms,
+    dependency_edges: dependencyEdges,
+    new_dependency_edge_findings: newDependencyEdgeFindings,
+  }
 }
 
 export function isSuspiciousExitCode(result: ScanResult): number {

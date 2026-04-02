@@ -3,6 +3,7 @@ import type { PackageNode, ScanResult } from '../domain/entities.js'
 export function renderPlainText(result: ScanResult): string {
   const lines = [
     `Scan: ${result.root.key}`,
+    `Record: ${result.record_id}`,
     `Overall risk: ${result.overall_risk_level} (${result.overall_risk_score.toFixed(2)})`,
     `Total scanned: ${result.total_scanned}`,
     `Suspicious packages: ${result.suspicious_count}`,
