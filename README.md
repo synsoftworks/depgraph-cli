@@ -1,5 +1,4 @@
 <h1 align="center">
-  <img src="docs/assets/node.png" alt="DepGraph mascot" width="88"><br>
   DepGraph CLI
 </h1>
 
