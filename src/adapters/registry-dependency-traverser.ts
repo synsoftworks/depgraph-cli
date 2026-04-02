@@ -30,48 +30,57 @@ export class RegistryDependencyTraverser implements DependencyTraverser {
     const nodes: TraversedPackageNode[] = []
 
     while (queue.length > 0) {
-      const current = queue.shift()
+      const currentDepth = queue[0]?.depth
 
-      if (current === undefined) {
+      if (currentDepth === undefined) {
         break
       }
 
-      const metadata = await this.metadataSource.resolvePackage(current.spec)
-      const key = packageKey(metadata.package)
+      const levelItems = this.takeLevel(queue, currentDepth)
+      const levelMetadata = await Promise.all(
+        levelItems.map(async (item) => ({
+          item,
+          metadata: await this.metadataSource.resolvePackage(item.spec),
+        })),
+      )
 
-      if (visited.has(key)) {
-        continue
-      }
+      for (const { item, metadata } of levelMetadata) {
+        const key = packageKey(metadata.package)
 
-      visited.add(key)
+        if (visited.has(key)) {
+          continue
+        }
 
-      const path = {
-        packages: [...current.path_packages, metadata.package],
-      }
+        visited.add(key)
 
-      nodes.push({
-        key,
-        package: metadata.package,
-        metadata,
-        depth: current.depth,
-        parent_key: current.parent_key,
-        path,
-      })
+        const path = {
+          packages: [...item.path_packages, metadata.package],
+        }
 
-      if (current.depth >= max_depth) {
-        continue
-      }
-
-      for (const [dependency_name, version_range] of Object.entries(metadata.dependencies)) {
-        queue.push({
-          spec: {
-            name: dependency_name,
-            version_range,
-          },
-          depth: current.depth + 1,
-          parent_key: key,
-          path_packages: path.packages,
+        nodes.push({
+          key,
+          package: metadata.package,
+          metadata,
+          depth: item.depth,
+          parent_key: item.parent_key,
+          path,
         })
+
+        if (item.depth >= max_depth) {
+          continue
+        }
+
+        for (const [dependency_name, version_range] of Object.entries(metadata.dependencies)) {
+          queue.push({
+            spec: {
+              name: dependency_name,
+              version_range,
+            },
+            depth: item.depth + 1,
+            parent_key: key,
+            path_packages: path.packages,
+          })
+        }
       }
     }
 
@@ -79,5 +88,21 @@ export class RegistryDependencyTraverser implements DependencyTraverser {
       root_key: nodes[0]?.key ?? '',
       nodes,
     }
+  }
+
+  private takeLevel(queue: QueueItem[], depth: number): QueueItem[] {
+    const levelItems: QueueItem[] = []
+
+    while (queue[0]?.depth === depth) {
+      const item = queue.shift()
+
+      if (item === undefined) {
+        break
+      }
+
+      levelItems.push(item)
+    }
+
+    return levelItems
   }
 }

@@ -98,3 +98,47 @@ test('BFS traverser enforces max depth using resolved name@version keys', async 
     ],
   )
 })
+
+test('BFS traverser resolves siblings at the same depth concurrently', async () => {
+  const metadataBySpec = {
+    root: createMetadata('root', '1.0.0', {
+      a: '^1.0.0',
+      b: '^1.0.0',
+    }),
+    'a@^1.0.0': createMetadata('a', '1.0.0'),
+    'b@^1.0.0': createMetadata('b', '1.0.0'),
+  } satisfies Record<string, PackageMetadata>
+
+  let activeResolutions = 0
+  let maxActiveResolutions = 0
+
+  class ConcurrentStubPackageMetadataSource implements PackageMetadataSource {
+    async resolvePackage(spec: PackageSpec): Promise<PackageMetadata> {
+      const key = spec.version_range === undefined ? spec.name : `${spec.name}@${spec.version_range}`
+      const metadata = metadataBySpec[key]
+
+      assert.ok(metadata, `Missing metadata for ${key}`)
+
+      activeResolutions += 1
+      maxActiveResolutions = Math.max(maxActiveResolutions, activeResolutions)
+
+      if (spec.name !== 'root') {
+        await new Promise((resolve) => setTimeout(resolve, 10))
+      }
+
+      activeResolutions -= 1
+
+      return metadata
+    }
+  }
+
+  const traverser = new RegistryDependencyTraverser(new ConcurrentStubPackageMetadataSource())
+
+  const graph = await traverser.traverse({ name: 'root' }, 1)
+
+  assert.deepEqual(
+    graph.nodes.map((node) => node.key),
+    ['root@1.0.0', 'a@1.0.0', 'b@1.0.0'],
+  )
+  assert.equal(maxActiveResolutions, 2)
+})

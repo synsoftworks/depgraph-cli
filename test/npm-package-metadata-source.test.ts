@@ -132,3 +132,54 @@ test('metadata source throws when publish timestamps are unavailable', async () 
     /does not include publish timestamps/,
   )
 })
+
+test('metadata source fetches packument and downloads concurrently', async () => {
+  let activeRequests = 0
+  let maxActiveRequests = 0
+
+  const source = new NpmPackageMetadataSource(async (input) => {
+    const url = String(input)
+
+    activeRequests += 1
+    maxActiveRequests = Math.max(maxActiveRequests, activeRequests)
+
+    await new Promise((resolve) => setTimeout(resolve, 10))
+
+    activeRequests -= 1
+
+    if (url.startsWith('https://api.npmjs.org/downloads/')) {
+      return new Response(JSON.stringify({ downloads: 42 }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    }
+
+    return new Response(
+      JSON.stringify({
+        name: 'demo-package',
+        'dist-tags': {
+          latest: '1.2.3',
+        },
+        versions: {
+          '1.2.3': {
+            version: '1.2.3',
+            dependencies: {},
+          },
+        },
+        time: {
+          created: '2014-09-02T01:28:28.167Z',
+          modified: '2024-01-15T10:22:33.000Z',
+          '1.2.3': '2024-01-15T10:22:33.000Z',
+        },
+      }),
+      {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      },
+    )
+  })
+
+  await source.resolvePackage({ name: 'demo-package' })
+
+  assert.equal(maxActiveRequests, 2)
+})
