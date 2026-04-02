@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/assets/node.png" alt="DepGraph mascot" width="88">
+</p>
+
 <h1 align="center">DepGraph CLI</h1>
 
 <p align="center">
