@@ -1,15 +1,18 @@
 {
   "name": "@synsoftworks/depgraph-cli",
   "version": "0.1.0",
-  "description": "ML-powered dependency risk detection for software supply chains",
+  "description": "Graph-first dependency risk analysis for npm packages and dependency trees",
   "type": "module",
   "keywords": [
     "security",
     "supply-chain",
+    "supply-chain-security",
     "dependencies",
+    "dependency-security",
     "npm-audit",
     "risk-scoring",
-    "cli"
+    "cli",
+    "terminal-ui"
   ],
   "author": {
     "name": "Synthesis Softworks",

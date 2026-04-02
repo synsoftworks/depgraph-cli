@@ -1,7 +1,13 @@
-[![GitHub Repo stars](https://img.shields.io/github/stars/synsoftworks/depgraph-cli?style=flat-square)](https://github.com/synsoftworks/depgraph-cli)
-[![npm version](https://img.shields.io/npm/v/%40synsoftworks%2Fdepgraph-cli?style=flat-square)](https://www.npmjs.com/package/@synsoftworks/depgraph-cli)
+<p align="center">
+  <strong>DepGraph CLI</strong>
+</p>
 
-# DepGraph CLI
+<p align="center">
+  <a href="https://github.com/synsoftworks/depgraph-cli"><img alt="GitHub Repo stars" src="https://img.shields.io/github/stars/synsoftworks/depgraph-cli?style=flat-square"></a>
+  <a href="https://www.npmjs.com/package/@synsoftworks/depgraph-cli"><img alt="npm version" src="https://img.shields.io/npm/v/%40synsoftworks%2Fdepgraph-cli?style=flat-square"></a>
+  <a href="https://github.com/synsoftworks/depgraph-cli/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/synsoftworks/depgraph-cli/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://github.com/synsoftworks/depgraph-cli/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/github/license/synsoftworks/depgraph-cli?style=flat-square"></a>
+</p>
 
 DepGraph is a graph-first CLI for scanning npm packages and dependency trees for supply chain risk.
 
@@ -41,25 +47,29 @@ Scan the same package with JSON output:
 depgraph scan axios --json --depth 2
 ```
 
-## Example Output
+## Screenshot
 
-Plain-text output from a scan:
+![DepGraph rich Ink terminal UI](docs/assets/depgraph-ink-ui.png)
+
+## Plain-Text Example
+
+Plain-text output from a real scan:
 
 ```text
 Scan: plain-crypto-js@0.0.1-security.0
-Overall risk: review (0.48)
+Overall risk: critical (1.00)
 Total scanned: 1
 Suspicious packages: 1
 
 Findings:
-- plain-crypto-js@0.0.1-security.0 [review 0.48] via plain-crypto-js@0.0.1-security.0
-  explanation: package was published 1 day(s) ago; package has only 1 published version(s)
+- plain-crypto-js@0.0.1-security.0 [critical 1.00] via plain-crypto-js@0.0.1-security.0
+  explanation: package was published 1 day(s) ago; package has only 1 published version(s); package is an npm security placeholder or tombstone for a previously malicious package
 
 Tree:
-- plain-crypto-js@0.0.1-security.0 [review 0.48]
+- plain-crypto-js@0.0.1-security.0 [critical 1.00]
 ```
 
-## JSON Mode
+## JSON Example
 
 Use `--json` when DepGraph is being called from CI, scripts, or agents. JSON mode bypasses terminal rendering and emits a deterministic result shape.
 
@@ -71,6 +81,9 @@ Trimmed example:
 
 ```json
 {
+  "scan_target": "axios",
+  "requested_depth": 2,
+  "threshold": 0.4,
   "root": {
     "name": "axios",
     "version": "1.14.0",
@@ -87,6 +100,43 @@ Trimmed example:
 
 This mode is intended for automation, CI checks, and agent tooling that needs machine-readable output instead of terminal formatting.
 
+## How Risk Scoring Works
+
+DepGraph uses explainable metadata-based signals instead of opaque output. Current signals include:
+
+- very new package age
+- low version history
+- low or zero weekly downloads when available
+- unusual publish churn
+- large dependency surface
+- npm security tombstones and deprecations
+
+Traversal is breadth-first so the closest risky node surfaces first, along with its shortest path from the root package.
+
+## Current Scope
+
+DepGraph is an MVP focused on npm registry metadata and dependency graph traversal.
+
+Current limitations:
+
+- no lockfile scanning yet
+- no tarball or source inspection
+- no advisory database integration beyond package metadata
+- no sensitive import analysis yet
+- no learned or ML-based scoring
+
+## Roadmap
+
+- [x] npm package scanning MVP
+- [x] rich Ink terminal UI
+- [x] deterministic JSON output for agents and CI
+- [x] breadth-first traversal with shortest suspicious paths
+- [ ] lockfile scanning
+- [ ] advisory integration
+- [ ] stronger composite signals
+- [ ] sensitive import analysis
+- [ ] explain command
+
 ## Philosophy
 
 DepGraph follows a simple rule: data first, presentation second.
@@ -95,8 +145,12 @@ Each command produces structured scan data first, then renders it for either a h
 
 ## Contributing
 
-Issues and pull requests are welcome. If you want to contribute, open an issue first for larger changes so the command behavior, JSON shape, and architecture stay aligned.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for local setup, workflow, and contribution guidelines.
+
+## Security
+
+If you believe you found a security issue in DepGraph itself, see [SECURITY.md](SECURITY.md).
 
 ## License
 
-MIT
+DepGraph is available under the [MIT License](LICENSE).
