@@ -1,9 +1,10 @@
 import { appendFile, mkdir, readFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 
-import type { ReviewEvent, ScanReviewRecord } from '../domain/contracts.js'
+import type { BaselineIdentity, ReviewEvent, ScanReviewRecord } from '../domain/contracts.js'
 import { StorageFailureError } from '../domain/errors.js'
 import type { ScanReviewStore } from '../domain/ports.js'
+import { baselineKeyForIdentity } from '../domain/value-objects.js'
 
 interface JsonlScanReviewStorePaths {
   scanRecordsPath: string
@@ -21,8 +22,9 @@ export class JsonlScanReviewStore implements ScanReviewStore {
     )
   }
 
-  async findLatestScanByBaseline(baselineKey: string): Promise<ScanReviewRecord | null> {
+  async findLatestScanByBaseline(baselineIdentity: BaselineIdentity): Promise<ScanReviewRecord | null> {
     const records = await this.readScanRecords()
+    const baselineKey = baselineKeyForIdentity(baselineIdentity)
 
     for (let index = records.length - 1; index >= 0; index -= 1) {
       const record = records[index]

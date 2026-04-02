@@ -21,6 +21,7 @@ test('JSONL scan review store appends records and retrieves the latest matching 
       createdAt: '2026-04-01T00:00:00.000Z',
       scanTarget: 'root',
       packageKey: 'root@1.0.0',
+      workspaceIdentity: workingDirectory,
       dependencyEdges: [{ from: 'root@1.0.0', to: 'child@1.0.0', child_depth: 1 }],
     }),
   )
@@ -30,6 +31,7 @@ test('JSONL scan review store appends records and retrieves the latest matching 
       createdAt: '2026-04-02T00:00:00.000Z',
       scanTarget: 'root',
       packageKey: 'root@1.1.0',
+      workspaceIdentity: workingDirectory,
       dependencyEdges: [
         { from: 'root@1.1.0', to: 'child@1.0.0', child_depth: 1 },
         { from: 'child@1.0.0', to: 'grandchild@1.0.0', child_depth: 2 },
@@ -37,7 +39,11 @@ test('JSONL scan review store appends records and retrieves the latest matching 
     }),
   )
 
-  const latest = await store.findLatestScanByBaseline('root::depth=3')
+  const latest = await store.findLatestScanByBaseline({
+    scan_target: 'root',
+    requested_depth: 3,
+    workspace_identity: workingDirectory,
+  })
   const contents = await readFile(paths.scanRecordsPath, 'utf8')
 
   assert.equal(contents.trim().split('\n').length, 2)
@@ -56,6 +62,7 @@ test('JSONL scan review store appends review events without rewriting scan recor
       createdAt: '2026-04-01T00:00:00.000Z',
       scanTarget: 'root',
       packageKey: 'root@1.0.0',
+      workspaceIdentity: workingDirectory,
       dependencyEdges: [{ from: 'root@1.0.0', to: 'child@1.0.0', child_depth: 1 }],
     }),
   )
@@ -76,12 +83,14 @@ function createRecord({
   createdAt,
   scanTarget,
   packageKey,
+  workspaceIdentity,
   dependencyEdges,
 }: {
   recordId: string
   createdAt: string
   scanTarget: string
   packageKey: string
+  workspaceIdentity: string
   dependencyEdges: DependencyGraphEdge[]
 }): ScanReviewRecord {
   return {
@@ -90,7 +99,12 @@ function createRecord({
     package: { name: 'root', version: packageKey.split('@').at(-1) ?? '1.0.0' },
     package_key: packageKey,
     scan_target: scanTarget,
-    baseline_key: `${scanTarget}::depth=3`,
+    baseline_identity: {
+      scan_target: scanTarget,
+      requested_depth: 3,
+      workspace_identity: workspaceIdentity,
+    },
+    baseline_key: `${scanTarget}::depth=3::workspace=${workspaceIdentity}`,
     baseline_record_id: null,
     requested_depth: 3,
     threshold: 0.4,
@@ -126,7 +140,7 @@ function createRecord({
     safe_count: 2,
     scan_duration_ms: 1,
     dependency_edges: dependencyEdges,
-    new_dependency_edge_findings: [],
+    edge_findings: [],
   }
 }
 

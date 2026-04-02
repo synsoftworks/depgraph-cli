@@ -8,8 +8,24 @@ export function renderPlainText(result: ScanResult): string {
     `Total scanned: ${result.total_scanned}`,
     `Suspicious packages: ${result.suspicious_count}`,
     '',
-    'Findings:',
+    'Changed edges:',
   ]
+
+  if (result.edge_findings.length === 0) {
+    lines.push('- none')
+  } else {
+    for (const edgeFinding of result.edge_findings) {
+      lines.push(
+        `- ${edgeFinding.parent_key} -> ${edgeFinding.child_key} [${edgeFinding.edge_type}] via ${edgeFinding.path.join(' > ')}`,
+      )
+      lines.push(`  explanation: ${edgeFinding.reason}`)
+    }
+  }
+
+  lines.push(
+    '',
+    'Findings:',
+  )
 
   if (result.findings.length === 0) {
     lines.push('- none')

@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react'
 import { Box, Text, render, useApp } from 'ink'
 
+import type { EdgeFinding } from '../domain/contracts.js'
 import type { PackageNode, RiskLevel, RiskSignal, ScanFinding, ScanResult } from '../domain/entities.js'
 
 const DIVIDER = '─'.repeat(92)
@@ -54,6 +55,10 @@ function ScanResultView({ result }: { result: ScanResult }): React.JSX.Element {
       </Box>
 
       <Box flexDirection="column" marginBottom={1}>
+        {result.edge_findings.length > 0 ? (
+          <ChangedEdgesPanel edgeFindings={result.edge_findings} />
+        ) : null}
+
         {flattenTree(result.root).map((row) => (
           <React.Fragment key={row.node.key}>
             <TreeRow
@@ -107,6 +112,32 @@ function ScanResultView({ result }: { result: ScanResult }): React.JSX.Element {
         <Text color="gray">
           {exitCode === 0 ? ' (no suspicious packages found)' : ' (suspicious packages found)'}
         </Text>
+      </Box>
+    </Box>
+  )
+}
+
+function ChangedEdgesPanel({ edgeFindings }: { edgeFindings: EdgeFinding[] }): React.JSX.Element {
+  return (
+    <Box marginBottom={1}>
+      <Box
+        flexDirection="column"
+        borderStyle="single"
+        borderColor="yellow"
+        paddingX={1}
+        paddingY={0}
+        width={PANEL_WIDTH}
+      >
+        <Text color="gray">CHANGED EDGES</Text>
+        {edgeFindings.map((edgeFinding) => (
+          <Box key={`${edgeFinding.parent_key}->${edgeFinding.child_key}`} flexDirection="column" marginBottom={1}>
+            <Text color="yellowBright">
+              {`${edgeFinding.parent_key} -> ${edgeFinding.child_key} [${edgeFinding.edge_type}]`}
+            </Text>
+            <Text color="gray">{edgeFinding.path.join(' > ')}</Text>
+            <Text color="white">{edgeFinding.reason}</Text>
+          </Box>
+        ))}
       </Box>
     </Box>
   )

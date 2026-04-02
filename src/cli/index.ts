@@ -79,6 +79,7 @@ export async function run(argv: string[], overrides: Partial<CliRuntime> = {}): 
           max_depth: options.depth,
           threshold: options.threshold,
           verbose: Boolean(options.verbose),
+          workspace_identity: process.cwd(),
         })
 
         if (options.json === true) {

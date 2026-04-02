@@ -1,4 +1,10 @@
-import type { EvaluationSummary, ReviewEvent, SignalFrequency } from '../domain/contracts.js'
+import type {
+  CoverageSignalFrequency,
+  EvaluationSummary,
+  MetadataCoverageSummary,
+  ReviewEvent,
+  SignalFrequency,
+} from '../domain/contracts.js'
 import type { PackageNode, RiskSignal } from '../domain/entities.js'
 import type { ScanReviewStore } from '../domain/ports.js'
 
@@ -15,13 +21,38 @@ export function createEvaluateScansUseCase({ reviewStore }: EvaluateScansDepende
 
     const latestReviewByRecordId = selectLatestReviews(reviewEvents)
     const signalCounts = new Map<string, number>()
+    const knownDownloadsSignalCounts = new Map<string, number>()
+    const missingDownloadsSignalCounts = new Map<string, number>()
+    const knownDependentsSignalCounts = new Map<string, number>()
+    const missingDependentsSignalCounts = new Map<string, number>()
+    let totalNodes = 0
+    let nodesMissingWeeklyDownloads = 0
+    let nodesMissingDependentsCount = 0
     let maliciousCount = 0
     let benignCount = 0
     let needsReviewCount = 0
 
     for (const record of scanRecords) {
-      collectSignals(record.root.signals, signalCounts)
-      collectNodeSignals(record.root.dependencies, signalCounts)
+      // This is feature-surface observability for the dataset, not a quality metric.
+      for (const node of flattenNodes(record.root)) {
+        totalNodes += 1
+
+        if (node.weekly_downloads === null) {
+          nodesMissingWeeklyDownloads += 1
+          collectSignals(node.signals, missingDownloadsSignalCounts)
+        } else {
+          collectSignals(node.signals, knownDownloadsSignalCounts)
+        }
+
+        if (node.dependents_count === null) {
+          nodesMissingDependentsCount += 1
+          collectSignals(node.signals, missingDependentsSignalCounts)
+        } else {
+          collectSignals(node.signals, knownDependentsSignalCounts)
+        }
+
+        collectSignals(node.signals, signalCounts)
+      }
 
       const latestReview = latestReviewByRecordId.get(record.record_id)
 
@@ -49,6 +80,15 @@ export function createEvaluateScansUseCase({ reviewStore }: EvaluateScansDepende
       benign_count: benignCount,
       needs_review_count: needsReviewCount,
       signal_frequency: toSortedSignalFrequency(signalCounts),
+      metadata_coverage: buildMetadataCoverageSummary({
+        totalNodes,
+        nodesMissingWeeklyDownloads,
+        nodesMissingDependentsCount,
+        knownDownloadsSignalCounts,
+        missingDownloadsSignalCounts,
+        knownDependentsSignalCounts,
+        missingDependentsSignalCounts,
+      }),
     }
   }
 }
@@ -67,11 +107,8 @@ function selectLatestReviews(reviewEvents: ReviewEvent[]): Map<string, ReviewEve
   return latestByRecordId
 }
 
-function collectNodeSignals(nodes: PackageNode['dependencies'], counts: Map<string, number>): void {
-  for (const node of nodes) {
-    collectSignals(node.signals, counts)
-    collectNodeSignals(node.dependencies, counts)
-  }
+function flattenNodes(root: PackageNode): PackageNode[] {
+  return [root, ...root.dependencies.flatMap(flattenNodes)]
 }
 
 function collectSignals(signals: RiskSignal[], counts: Map<string, number>): void {
@@ -90,4 +127,61 @@ function toSortedSignalFrequency(signalCounts: Map<string, number>): SignalFrequ
 
       return left.type.localeCompare(right.type)
     })
+}
+
+function buildMetadataCoverageSummary({
+  totalNodes,
+  nodesMissingWeeklyDownloads,
+  nodesMissingDependentsCount,
+  knownDownloadsSignalCounts,
+  missingDownloadsSignalCounts,
+  knownDependentsSignalCounts,
+  missingDependentsSignalCounts,
+}: {
+  totalNodes: number
+  nodesMissingWeeklyDownloads: number
+  nodesMissingDependentsCount: number
+  knownDownloadsSignalCounts: Map<string, number>
+  missingDownloadsSignalCounts: Map<string, number>
+  knownDependentsSignalCounts: Map<string, number>
+  missingDependentsSignalCounts: Map<string, number>
+}): MetadataCoverageSummary {
+  return {
+    weekly_downloads: {
+      total_nodes: totalNodes,
+      missing_count: nodesMissingWeeklyDownloads,
+      missing_percent: percentage(nodesMissingWeeklyDownloads, totalNodes),
+    },
+    dependents_count: {
+      total_nodes: totalNodes,
+      missing_count: nodesMissingDependentsCount,
+      missing_percent: percentage(nodesMissingDependentsCount, totalNodes),
+    },
+    signal_frequency_by_weekly_downloads: toCoverageSignalFrequency(
+      knownDownloadsSignalCounts,
+      missingDownloadsSignalCounts,
+    ),
+    signal_frequency_by_dependents_count: toCoverageSignalFrequency(
+      knownDependentsSignalCounts,
+      missingDependentsSignalCounts,
+    ),
+  }
+}
+
+function toCoverageSignalFrequency(
+  knownCounts: Map<string, number>,
+  missingCounts: Map<string, number>,
+): CoverageSignalFrequency {
+  return {
+    known: toSortedSignalFrequency(knownCounts),
+    missing: toSortedSignalFrequency(missingCounts),
+  }
+}
+
+function percentage(part: number, total: number): number {
+  if (total === 0) {
+    return 0
+  }
+
+  return Number(((part / total) * 100).toFixed(2))
 }
