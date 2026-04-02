@@ -47,10 +47,6 @@ Scan the same package with JSON output:
 depgraph scan axios --json --depth 2
 ```
 
-## Screenshot
-
-![DepGraph rich Ink terminal UI](docs/assets/depgraph-ink-ui.png)
-
 ## Plain-Text Example
 
 Plain-text output from a real scan:
@@ -110,8 +106,6 @@ DepGraph uses explainable metadata-based signals instead of opaque output. Curre
 - unusual publish churn
 - large dependency surface
 - npm security tombstones and deprecations
-
-Traversal is breadth-first so the closest risky node surfaces first, along with its shortest path from the root package.
 
 ## Current Scope
 
