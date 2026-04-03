@@ -1,4 +1,5 @@
-import type { ResolvedReviewState, ReviewEvent } from '../domain/contracts.js'
+import type { ResolvedReviewTargetState, ReviewEvent, ReviewTarget } from '../domain/contracts.js'
+import { reviewTargetScopeKey } from '../domain/review-targets.js'
 
 /**
  * This policy remains in the application layer for now because the rules are
@@ -14,14 +15,14 @@ import type { ResolvedReviewState, ReviewEvent } from '../domain/contracts.js'
  * events erase a previously resolved malicious or benign label.
  */
 export function resolveReviewStateFromEvents(
-  recordId: string,
+  reviewTarget: ReviewTarget,
   rawReviewEvents: ReviewEvent[],
-): ResolvedReviewState {
+): ResolvedReviewTargetState {
   let latestReviewEvent: ReviewEvent | null = null
   let latestLabelBearingEvent: ReviewEvent | null = null
 
   for (const event of rawReviewEvents) {
-    if (event.record_id !== recordId) {
+    if (reviewTargetScopeKey(event.review_target) !== reviewTargetScopeKey(reviewTarget)) {
       continue
     }
 
@@ -35,7 +36,8 @@ export function resolveReviewStateFromEvents(
   }
 
   return {
-    record_id: recordId,
+    record_id: reviewTarget.record_id,
+    review_target: reviewTarget,
     latest_review_event: latestReviewEvent,
     latest_label_bearing_event: latestLabelBearingEvent,
     workflow_status: toWorkflowStatus(latestReviewEvent),
@@ -51,36 +53,44 @@ export function resolveReviewStateFromEvents(
  */
 export function buildResolvedReviewStateIndex(
   rawReviewEvents: ReviewEvent[],
-): ReadonlyMap<string, ResolvedReviewState> {
-  const eventsByRecordId = new Map<string, ReviewEvent[]>()
+): ReadonlyMap<string, ResolvedReviewTargetState> {
+  const eventsByTargetScope = new Map<string, ReviewEvent[]>()
 
   for (const event of rawReviewEvents) {
-    const existing = eventsByRecordId.get(event.record_id)
+    const scopeKey = reviewTargetScopeKey(event.review_target)
+    const existing = eventsByTargetScope.get(scopeKey)
 
     if (existing === undefined) {
-      eventsByRecordId.set(event.record_id, [event])
+      eventsByTargetScope.set(scopeKey, [event])
       continue
     }
 
     existing.push(event)
   }
 
-  const resolvedStates = new Map<string, ResolvedReviewState>()
+  const resolvedStates = new Map<string, ResolvedReviewTargetState>()
 
-  for (const [recordId, eventsForRecord] of eventsByRecordId.entries()) {
-    resolvedStates.set(recordId, resolveReviewStateFromEvents(recordId, eventsForRecord))
+  for (const [scopeKey, eventsForTarget] of eventsByTargetScope.entries()) {
+    const reviewTarget = eventsForTarget[0]?.review_target
+
+    if (reviewTarget === undefined) {
+      continue
+    }
+
+    resolvedStates.set(scopeKey, resolveReviewStateFromEvents(reviewTarget, eventsForTarget))
   }
 
   return resolvedStates
 }
 
 export function getResolvedReviewState(
-  recordId: string,
-  resolvedReviewStateIndex: ReadonlyMap<string, ResolvedReviewState>,
-): ResolvedReviewState {
+  reviewTarget: ReviewTarget,
+  resolvedReviewStateIndex: ReadonlyMap<string, ResolvedReviewTargetState>,
+): ResolvedReviewTargetState {
   return (
-    resolvedReviewStateIndex.get(recordId) ?? {
-      record_id: recordId,
+    resolvedReviewStateIndex.get(reviewTargetScopeKey(reviewTarget)) ?? {
+      record_id: reviewTarget.record_id,
+      review_target: reviewTarget,
       latest_review_event: null,
       latest_label_bearing_event: null,
       workflow_status: 'unreviewed',
@@ -94,7 +104,9 @@ function isLabelBearingEvent(event: ReviewEvent): boolean {
   return event.outcome === 'malicious' || event.outcome === 'benign'
 }
 
-function toWorkflowStatus(latestReviewEvent: ReviewEvent | null): ResolvedReviewState['workflow_status'] {
+function toWorkflowStatus(
+  latestReviewEvent: ReviewEvent | null,
+): ResolvedReviewTargetState['workflow_status'] {
   if (latestReviewEvent === null) {
     return 'unreviewed'
   }
@@ -108,7 +120,7 @@ function toWorkflowStatus(latestReviewEvent: ReviewEvent | null): ResolvedReview
 
 function toCanonicalLabel(
   latestLabelBearingEvent: ReviewEvent | null,
-): ResolvedReviewState['canonical_label'] {
+): ResolvedReviewTargetState['canonical_label'] {
   if (latestLabelBearingEvent === null) {
     return null
   }

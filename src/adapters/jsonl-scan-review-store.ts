@@ -4,6 +4,10 @@ import { dirname, join } from 'node:path'
 import type { BaselineIdentity, ReviewEvent, ScanReviewRecord } from '../domain/contracts.js'
 import { StorageFailureError } from '../domain/errors.js'
 import type { ScanReviewStore } from '../domain/ports.js'
+import {
+  createPackageFindingReviewTarget,
+  normalizeScanReviewRecord,
+} from '../domain/review-targets.js'
 import { baselineKeyForIdentity } from '../domain/value-objects.js'
 
 interface JsonlScanReviewStorePaths {
@@ -64,19 +68,23 @@ export class JsonlScanReviewStore implements ScanReviewStore {
   }
 
   async listReviewEvents(): Promise<ReviewEvent[]> {
-    return readJsonlFile<ReviewEvent>(
+    const reviewEvents = await readJsonlFile<StoredReviewEvent>(
       this.paths.reviewEventsPath,
       `Unable to read review history from ${this.paths.reviewEventsPath}`,
       `Unable to parse review history in ${this.paths.reviewEventsPath}`,
     )
+
+    return reviewEvents.map(normalizeStoredReviewEvent)
   }
 
   private async readScanRecords(): Promise<ScanReviewRecord[]> {
-    return readJsonlFile<ScanReviewRecord>(
+    const records = await readJsonlFile<ScanReviewRecord>(
       this.paths.scanRecordsPath,
       `Unable to read scan history from ${this.paths.scanRecordsPath}`,
       `Unable to parse scan history in ${this.paths.scanRecordsPath}`,
     )
+
+    return records.map((record) => normalizeScanReviewRecord(record))
   }
 }
 
@@ -122,6 +130,36 @@ async function readJsonlFile<T>(
     return lines.map((line) => JSON.parse(line) as T)
   } catch (error) {
     throw new StorageFailureError(`${parseFailurePrefix}: ${getErrorMessage(error)}`)
+  }
+}
+
+type StoredReviewEvent = ReviewEvent & {
+  package_key?: string
+}
+
+function normalizeStoredReviewEvent(event: StoredReviewEvent): ReviewEvent {
+  if (event.review_target !== undefined) {
+    return event
+  }
+
+  const packageKey = event.package_key
+
+  if (packageKey === undefined) {
+    throw new StorageFailureError(
+      `Unable to parse review history event "${event.event_id}": explicit review_target is required.`,
+    )
+  }
+
+  return {
+    event_id: event.event_id,
+    record_id: event.record_id,
+    review_target: createPackageFindingReviewTarget(event.record_id, packageKey),
+    created_at: event.created_at,
+    outcome: event.outcome,
+    notes: event.notes,
+    resolution_timestamp: event.resolution_timestamp,
+    review_source: event.review_source,
+    confidence: event.confidence,
   }
 }
 

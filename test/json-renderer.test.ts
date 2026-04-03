@@ -41,6 +41,15 @@ function createResult(): ScanResult {
         path: ['root@1.0.0', 'child@1.0.0'],
         depth: 1,
         edge_type: 'direct',
+        review_target: {
+          kind: 'edge_finding',
+          record_id: '2026-04-01T00:00:00.000Z:root@1.0.0:depth=3',
+          target_id: 'edge_finding:direct:root@1.0.0->child@1.0.0',
+          edge_finding_key: 'edge_finding:direct:root@1.0.0->child@1.0.0',
+          parent_key: 'root@1.0.0',
+          child_key: 'child@1.0.0',
+          edge_type: 'direct',
+        },
         baseline_record_id: 'baseline-record',
         baseline_identity: {
           scan_target: 'root',
@@ -57,6 +66,13 @@ function createResult(): ScanResult {
         name: 'child',
         version: '1.0.0',
         depth: 1,
+        review_target: {
+          kind: 'package_finding',
+          record_id: '2026-04-01T00:00:00.000Z:root@1.0.0:depth=3',
+          target_id: 'package_finding:child@1.0.0',
+          finding_key: 'package_finding:child@1.0.0',
+          package_key: 'child@1.0.0',
+        },
         path: {
           packages: [
             { name: 'root', version: '1.0.0' },
@@ -117,6 +133,7 @@ test('scan JSON contract remains stable and deterministic', () => {
     'path',
     'depth',
     'edge_type',
+    'review_target',
     'baseline_record_id',
     'baseline_identity',
     'reason',
@@ -127,6 +144,7 @@ test('scan JSON contract remains stable and deterministic', () => {
     'name',
     'version',
     'depth',
+    'review_target',
     'path',
     'risk_score',
     'risk_level',
@@ -140,6 +158,15 @@ test('scan JSON contract remains stable and deterministic', () => {
     path: ['root@1.0.0', 'child@1.0.0'],
     depth: 1,
     edge_type: 'direct',
+    review_target: {
+      kind: 'edge_finding',
+      record_id: '2026-04-01T00:00:00.000Z:root@1.0.0:depth=3',
+      target_id: 'edge_finding:direct:root@1.0.0->child@1.0.0',
+      edge_finding_key: 'edge_finding:direct:root@1.0.0->child@1.0.0',
+      parent_key: 'root@1.0.0',
+      child_key: 'child@1.0.0',
+      edge_type: 'direct',
+    },
     baseline_record_id: 'baseline-record',
     baseline_identity: {
       scan_target: 'root',
@@ -150,5 +177,6 @@ test('scan JSON contract remains stable and deterministic', () => {
     recommendation: 'review',
   })
   assert.equal(parsed.findings[0].key, 'child@1.0.0')
+  assert.equal(parsed.findings[0].review_target.target_id, 'package_finding:child@1.0.0')
   assert.equal(parsed.findings[0].signals[0].type, 'test_signal')
 })

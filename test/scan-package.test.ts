@@ -335,6 +335,13 @@ test('scan use case persists a durable scan review record after the scan complet
         name: 'child',
         version: '1.0.0',
         depth: 1,
+        review_target: {
+          kind: 'package_finding',
+          record_id: '2026-04-01T00:00:00.000Z:root@1.0.0:depth=3',
+          target_id: 'package_finding:child@1.0.0',
+          finding_key: 'package_finding:child@1.0.0',
+          package_key: 'child@1.0.0',
+        },
         path: {
           packages: [
             { name: 'root', version: '1.0.0' },
@@ -712,6 +719,15 @@ function createEdgeFinding({
     path,
     depth,
     edge_type: edgeType,
+    review_target: {
+      kind: 'edge_finding',
+      record_id: '2026-04-02T00:00:00.000Z:root@1.0.0:depth=3',
+      target_id: `edge_finding:${edgeType}:${parentKey}->${childKey}`,
+      edge_finding_key: `edge_finding:${edgeType}:${parentKey}->${childKey}`,
+      parent_key: parentKey,
+      child_key: childKey,
+      edge_type: edgeType,
+    },
     baseline_record_id: baselineRecordId,
     baseline_identity: {
       scan_target: 'root',

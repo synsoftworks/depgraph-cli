@@ -27,6 +27,10 @@ import {
   riskLevelForScore,
   riskScoreForSignals,
 } from '../domain/value-objects.js'
+import {
+  createEdgeFindingReviewTarget,
+  createPackageFindingReviewTarget,
+} from '../domain/review-targets.js'
 
 interface ScanPackageDependencies {
   traverser: DependencyTraverser
@@ -39,6 +43,9 @@ interface DependencyEdgeSnapshot {
   edge: DependencyGraphEdge
   path: string[]
 }
+
+type PendingEdgeFinding = Omit<EdgeFinding, 'review_target'>
+type PendingScanFinding = Omit<ScanFinding, 'review_target'>
 
 export function createScanPackageUseCase({
   traverser,
@@ -67,10 +74,10 @@ export function createScanPackageUseCase({
     const edgeSnapshots = buildDependencyEdgeSnapshots(traversedGraph)
     const dependencyEdges = edgeSnapshots.map((snapshot) => snapshot.edge)
     const previousRecord = await findPreviousRecord(reviewStore, baselineIdentity)
-    const edgeFindings = buildEdgeFindings(previousRecord, edgeSnapshots, baselineIdentity)
-    const deltaSignals = buildDeltaSignals(edgeFindings)
+    const pendingEdgeFindings = buildEdgeFindings(previousRecord, edgeSnapshots, baselineIdentity)
+    const deltaSignals = buildDeltaSignals(pendingEdgeFindings)
     const nodeMap = new Map<string, PackageNode>()
-    const findings: ScanFinding[] = []
+    const pendingFindings: PendingScanFinding[] = []
     let overallRiskScore = 0
 
     for (const traversedNode of traversedGraph.nodes) {
@@ -112,7 +119,7 @@ export function createScanPackageUseCase({
       overallRiskScore = Math.max(overallRiskScore, assessment.risk_score)
 
       if (assessment.risk_score >= threshold) {
-        findings.push({
+        pendingFindings.push({
           key: traversedNode.key,
           name: traversedNode.package.name,
           version: traversedNode.package.version,
@@ -140,14 +147,27 @@ export function createScanPackageUseCase({
       }
     }
 
-    findings.sort(compareFindings)
-
     const completedAt = now()
     const rootNode = nodeMap.get(traversedGraph.root_key)!
     const recordId = `${completedAt.toISOString()}:${packageKey({
       name: rootNode.name,
       version: rootNode.version,
     })}:depth=${maxDepth}`
+    const findings = pendingFindings
+      .map((finding) => ({
+        ...finding,
+        review_target: createPackageFindingReviewTarget(recordId, finding.key),
+      }))
+      .sort(compareFindings)
+    const edgeFindings = pendingEdgeFindings.map((edgeFinding) => ({
+      ...edgeFinding,
+      review_target: createEdgeFindingReviewTarget(
+        recordId,
+        edgeFinding.parent_key,
+        edgeFinding.child_key,
+        edgeFinding.edge_type,
+      ),
+    }))
     const result: ScanResult = {
       record_id: recordId,
       scan_target: scanTarget,
@@ -189,7 +209,7 @@ function buildExplanation(signals: PackageNode['signals']): string {
   return signals.map((signal) => signal.reason).join('; ')
 }
 
-function compareFindings(left: ScanFinding, right: ScanFinding): number {
+function compareFindings(left: PendingScanFinding, right: PendingScanFinding): number {
   if (left.depth !== right.depth) {
     return left.depth - right.depth
   }
@@ -256,7 +276,7 @@ function buildEdgeFindings(
   previousRecord: ScanReviewRecord | null,
   currentEdges: DependencyEdgeSnapshot[],
   baselineIdentity: BaselineIdentity,
-): EdgeFinding[] {
+): PendingEdgeFinding[] {
   if (previousRecord === null) {
     return []
   }
@@ -279,7 +299,7 @@ function buildEdgeFindings(
 }
 
 function buildDeltaSignals(
-  edgeFindings: EdgeFinding[],
+  edgeFindings: PendingEdgeFinding[],
 ): RiskSignal[] {
   return edgeFindings.map((finding) => ({
     type: finding.edge_type === 'direct' ? 'new_direct_dependency_edge' : 'new_transitive_dependency_edge',

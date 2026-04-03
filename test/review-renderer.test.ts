@@ -14,7 +14,7 @@ test('review JSON contract remains stable and deterministic', () => {
   assert.deepEqual(Object.keys(parsed), [
     'event_id',
     'record_id',
-    'package_key',
+    'review_target',
     'created_at',
     'outcome',
     'notes',
@@ -27,9 +27,15 @@ test('review JSON contract remains stable and deterministic', () => {
 
 function createReviewEvent(): ReviewEvent {
   return {
-    event_id: '2026-04-03T00:00:00.000Z:scan-1:benign',
+    event_id: '2026-04-03T00:00:00.000Z:package_finding:root@1.0.0:benign',
     record_id: 'scan-1',
-    package_key: 'root@1.0.0',
+    review_target: {
+      kind: 'package_finding',
+      record_id: 'scan-1',
+      target_id: 'package_finding:root@1.0.0',
+      finding_key: 'package_finding:root@1.0.0',
+      package_key: 'root@1.0.0',
+    },
     created_at: '2026-04-03T00:00:00.000Z',
     outcome: 'benign',
     notes: 'verified expansion',

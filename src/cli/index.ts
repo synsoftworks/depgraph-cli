@@ -101,6 +101,7 @@ export async function run(argv: string[], overrides: Partial<CliRuntime> = {}): 
     .command('review')
     .description('Append a human or external review event for a specific stored scan record.')
     .argument('<record_id>', 'Stored scan record id returned by depgraph scan')
+    .option('--target <target_id>', 'Explicit review target id from scan findings or changed edges')
     .requiredOption(
       '--outcome <outcome>',
       'Review outcome: malicious, benign, or needs_review',
@@ -115,15 +116,16 @@ export async function run(argv: string[], overrides: Partial<CliRuntime> = {}): 
       [
         '',
         'Examples:',
-        '  depgraph review 2026-04-02T00:00:00.000Z:lodash@4.17.21:depth=3 --outcome benign',
-        '  depgraph review scan-record-id --outcome needs_review --notes "edge changed unexpectedly"',
-        '  depgraph review scan-record-id --outcome malicious --source external --confidence 0.92 --json',
+        '  depgraph review 2026-04-02T00:00:00.000Z:lodash@4.17.21:depth=3 --target package_finding:lodash@4.17.21 --outcome benign',
+        '  depgraph review scan-record-id --target edge_finding:direct:root@1.0.0->new-child@1.0.0 --outcome needs_review --notes "edge changed unexpectedly"',
+        '  depgraph review scan-record-id --target package_finding:child@1.0.0 --outcome malicious --source external --confidence 0.92 --json',
       ].join('\n'),
     )
     .action(async (recordId: string, options) => {
       try {
         const result = await runtime.reviewScan({
           record_id: recordId,
+          target_id: typeof options.target === 'string' ? options.target : undefined,
           outcome: options.outcome,
           notes: typeof options.notes === 'string' ? options.notes : null,
           review_source: options.source,

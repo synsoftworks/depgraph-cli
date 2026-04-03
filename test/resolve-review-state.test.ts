@@ -6,21 +6,24 @@ import {
   getResolvedReviewState,
   resolveReviewStateFromEvents,
 } from '../src/application/resolve-review-state.js'
-import type { ReviewEvent } from '../src/domain/contracts.js'
+import type { ReviewEvent, ReviewTarget } from '../src/domain/contracts.js'
 
 test('resolveReviewStateFromEvents returns unreviewed when no review events exist', () => {
-  const state = resolveReviewStateFromEvents('record-1', [])
+  const reviewTarget = createReviewTarget('record-1')
+  const state = resolveReviewStateFromEvents(reviewTarget, [])
 
   assert.equal(state.workflow_status, 'unreviewed')
   assert.equal(state.canonical_label, null)
   assert.equal(state.canonical_label_source, null)
   assert.equal(state.latest_review_event, null)
   assert.equal(state.latest_label_bearing_event, null)
+  assert.deepEqual(state.review_target, reviewTarget)
 })
 
 test('resolveReviewStateFromEvents resolves a single benign review', () => {
-  const state = resolveReviewStateFromEvents('record-1', [
-    createReviewEvent('benign', '2026-04-01T00:00:00.000Z'),
+  const reviewTarget = createReviewTarget('record-1')
+  const state = resolveReviewStateFromEvents(reviewTarget, [
+    createReviewEvent(reviewTarget, 'benign', '2026-04-01T00:00:00.000Z'),
   ])
 
   assert.equal(state.workflow_status, 'resolved')
@@ -29,8 +32,9 @@ test('resolveReviewStateFromEvents resolves a single benign review', () => {
 })
 
 test('resolveReviewStateFromEvents resolves a single malicious review', () => {
-  const state = resolveReviewStateFromEvents('record-1', [
-    createReviewEvent('malicious', '2026-04-01T00:00:00.000Z'),
+  const reviewTarget = createReviewTarget('record-1')
+  const state = resolveReviewStateFromEvents(reviewTarget, [
+    createReviewEvent(reviewTarget, 'malicious', '2026-04-01T00:00:00.000Z'),
   ])
 
   assert.equal(state.workflow_status, 'resolved')
@@ -39,8 +43,9 @@ test('resolveReviewStateFromEvents resolves a single malicious review', () => {
 })
 
 test('resolveReviewStateFromEvents keeps needs_review as workflow-only when no label exists', () => {
-  const state = resolveReviewStateFromEvents('record-1', [
-    createReviewEvent('needs_review', '2026-04-01T00:00:00.000Z'),
+  const reviewTarget = createReviewTarget('record-1')
+  const state = resolveReviewStateFromEvents(reviewTarget, [
+    createReviewEvent(reviewTarget, 'needs_review', '2026-04-01T00:00:00.000Z'),
   ])
 
   assert.equal(state.workflow_status, 'needs_review')
@@ -49,9 +54,10 @@ test('resolveReviewStateFromEvents keeps needs_review as workflow-only when no l
 })
 
 test('resolveReviewStateFromEvents preserves the last resolved label when a later needs_review arrives', () => {
-  const state = resolveReviewStateFromEvents('record-1', [
-    createReviewEvent('benign', '2026-04-01T00:00:00.000Z'),
-    createReviewEvent('needs_review', '2026-04-02T00:00:00.000Z'),
+  const reviewTarget = createReviewTarget('record-1')
+  const state = resolveReviewStateFromEvents(reviewTarget, [
+    createReviewEvent(reviewTarget, 'benign', '2026-04-01T00:00:00.000Z'),
+    createReviewEvent(reviewTarget, 'needs_review', '2026-04-02T00:00:00.000Z'),
   ])
 
   assert.equal(state.workflow_status, 'needs_review')
@@ -61,9 +67,10 @@ test('resolveReviewStateFromEvents preserves the last resolved label when a late
 })
 
 test('resolveReviewStateFromEvents updates canonical label from benign to malicious', () => {
-  const state = resolveReviewStateFromEvents('record-1', [
-    createReviewEvent('benign', '2026-04-01T00:00:00.000Z'),
-    createReviewEvent('malicious', '2026-04-02T00:00:00.000Z'),
+  const reviewTarget = createReviewTarget('record-1')
+  const state = resolveReviewStateFromEvents(reviewTarget, [
+    createReviewEvent(reviewTarget, 'benign', '2026-04-01T00:00:00.000Z'),
+    createReviewEvent(reviewTarget, 'malicious', '2026-04-02T00:00:00.000Z'),
   ])
 
   assert.equal(state.workflow_status, 'resolved')
@@ -71,38 +78,56 @@ test('resolveReviewStateFromEvents updates canonical label from benign to malici
 })
 
 test('resolveReviewStateFromEvents updates canonical label from malicious to benign', () => {
-  const state = resolveReviewStateFromEvents('record-1', [
-    createReviewEvent('malicious', '2026-04-01T00:00:00.000Z'),
-    createReviewEvent('benign', '2026-04-02T00:00:00.000Z'),
+  const reviewTarget = createReviewTarget('record-1')
+  const state = resolveReviewStateFromEvents(reviewTarget, [
+    createReviewEvent(reviewTarget, 'malicious', '2026-04-01T00:00:00.000Z'),
+    createReviewEvent(reviewTarget, 'benign', '2026-04-02T00:00:00.000Z'),
   ])
 
   assert.equal(state.workflow_status, 'resolved')
   assert.equal(state.canonical_label, 'benign')
 })
 
-test('getResolvedReviewState returns an explicit unreviewed default for records without events', () => {
+test('getResolvedReviewState returns an explicit unreviewed default for targets without events', () => {
+  const reviewTarget = createReviewTarget('record-1')
+  const missingTarget = createReviewTarget('missing-record')
   const resolvedReviewStateIndex = buildResolvedReviewStateIndex([
-    createReviewEvent('benign', '2026-04-01T00:00:00.000Z'),
+    createReviewEvent(reviewTarget, 'benign', '2026-04-01T00:00:00.000Z'),
   ])
 
-  const state = getResolvedReviewState('missing-record', resolvedReviewStateIndex)
+  const state = getResolvedReviewState(missingTarget, resolvedReviewStateIndex)
 
   assert.equal(state.record_id, 'missing-record')
+  assert.deepEqual(state.review_target, missingTarget)
   assert.equal(state.workflow_status, 'unreviewed')
   assert.equal(state.canonical_label, null)
   assert.equal(state.latest_review_event, null)
 })
 
-function createReviewEvent(outcome: ReviewEvent['outcome'], createdAt: string): ReviewEvent {
+function createReviewEvent(
+  reviewTarget: ReviewTarget,
+  outcome: ReviewEvent['outcome'],
+  createdAt: string,
+): ReviewEvent {
   return {
-    event_id: `${createdAt}:record-1:${outcome}`,
-    record_id: 'record-1',
-    package_key: 'root@1.0.0',
+    event_id: `${createdAt}:${reviewTarget.target_id}:${outcome}`,
+    record_id: reviewTarget.record_id,
+    review_target: reviewTarget,
     created_at: createdAt,
     outcome,
     notes: null,
     resolution_timestamp: outcome === 'needs_review' ? null : createdAt,
     review_source: 'human',
     confidence: 0.9,
+  }
+}
+
+function createReviewTarget(recordId: string): ReviewTarget {
+  return {
+    kind: 'package_finding',
+    record_id: recordId,
+    target_id: `package_finding:${recordId}@1.0.0`,
+    finding_key: `package_finding:${recordId}@1.0.0`,
+    package_key: `${recordId}@1.0.0`,
   }
 }

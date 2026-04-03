@@ -11,12 +11,14 @@ test('evaluation renderer surfaces raw events and derived canonical labels', () 
   const parsed = JSON.parse(json)
 
   assert.match(plainText, /Raw review events:/)
+  assert.match(plainText, /Review targets:/)
   assert.match(plainText, /Canonical labels \(derived from latest_label_bearing_event\):/)
   assert.match(plainText, /- total: 3/)
-  assert.match(plainText, /- labeled records: 2/)
+  assert.match(plainText, /- labeled targets: 2/)
   assert.match(plainText, /Workflow status:/)
   assert.deepEqual(Object.keys(parsed), [
     'total_scans',
+    'review_targets',
     'raw_review_events',
     'canonical_labels',
     'workflow_status',
@@ -30,16 +32,16 @@ test('evaluation renderer surfaces raw events and derived canonical labels', () 
     'needs_review_events',
   ])
   assert.deepEqual(Object.keys(parsed.canonical_labels), [
-    'total_labeled_records',
-    'malicious_records',
-    'benign_records',
-    'unlabeled_records',
+    'total_labeled_targets',
+    'malicious_targets',
+    'benign_targets',
+    'unlabeled_targets',
     'derived_from',
   ])
   assert.deepEqual(Object.keys(parsed.workflow_status), [
-    'unreviewed_records',
-    'needs_review_records',
-    'resolved_records',
+    'unreviewed_targets',
+    'needs_review_targets',
+    'resolved_targets',
   ])
   assert.deepEqual(Object.keys(parsed.metadata_coverage), [
     'weekly_downloads',
@@ -53,6 +55,11 @@ test('evaluation renderer surfaces raw events and derived canonical labels', () 
 function createSummary(): EvaluationSummary {
   return {
     total_scans: 3,
+    review_targets: {
+      total_targets: 3,
+      package_finding_targets: 2,
+      edge_finding_targets: 1,
+    },
     raw_review_events: {
       total_events: 3,
       malicious_events: 1,
@@ -60,16 +67,16 @@ function createSummary(): EvaluationSummary {
       needs_review_events: 1,
     },
     canonical_labels: {
-      total_labeled_records: 2,
-      malicious_records: 1,
-      benign_records: 1,
-      unlabeled_records: 1,
+      total_labeled_targets: 2,
+      malicious_targets: 1,
+      benign_targets: 1,
+      unlabeled_targets: 1,
       derived_from: 'latest_label_bearing_event',
     },
     workflow_status: {
-      unreviewed_records: 1,
-      needs_review_records: 1,
-      resolved_records: 1,
+      unreviewed_targets: 1,
+      needs_review_targets: 1,
+      resolved_targets: 1,
     },
     signal_frequency: [{ type: 'root_signal', count: 2 }],
     metadata_coverage: {

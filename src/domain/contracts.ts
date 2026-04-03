@@ -71,6 +71,7 @@ export interface EdgeFinding {
   path: string[]
   depth: number
   edge_type: 'direct' | 'transitive'
+  review_target: EdgeFindingReviewTarget
   baseline_record_id: string | null
   baseline_identity: BaselineIdentity
   reason: string
@@ -103,21 +104,46 @@ export interface ScanReviewRecord {
 
 export interface ReviewScanRequest {
   record_id: string
+  target_id?: string
   outcome: ReviewOutcome
   notes: string | null
   review_source: ReviewSource
   confidence: number | null
 }
 
+export type ReviewTargetKind = 'package_finding' | 'edge_finding'
+
+interface ReviewTargetBase {
+  kind: ReviewTargetKind
+  record_id: string
+  target_id: string
+}
+
+export interface PackageFindingReviewTarget extends ReviewTargetBase {
+  kind: 'package_finding'
+  finding_key: string
+  package_key: string
+}
+
+export interface EdgeFindingReviewTarget extends ReviewTargetBase {
+  kind: 'edge_finding'
+  edge_finding_key: string
+  parent_key: string
+  child_key: string
+  edge_type: EdgeFinding['edge_type']
+}
+
+export type ReviewTarget = PackageFindingReviewTarget | EdgeFindingReviewTarget
+
 /**
  * Review events are append-only source history.
  * They preserve raw review evidence, but they are not a safe label interface.
- * Any label-aware consumer must derive `ResolvedReviewState` before using them.
+ * Any label-aware consumer must derive `ResolvedReviewTargetState` before using them.
  */
 export interface ReviewEvent {
   event_id: string
   record_id: string
-  package_key: string
+  review_target: ReviewTarget
   created_at: string
   outcome: ReviewOutcome
   notes: string | null
@@ -135,8 +161,9 @@ export type CanonicalLabelSource = 'latest_label_bearing_event'
  * Canonical labels are derived from raw review events and must not be stored
  * or treated as mutable source-of-truth state.
  */
-export interface ResolvedReviewState {
+export interface ResolvedReviewTargetState {
   record_id: string
+  review_target: ReviewTarget
   latest_review_event: ReviewEvent | null
   latest_label_bearing_event: ReviewEvent | null
   workflow_status: WorkflowStatus
@@ -175,21 +202,28 @@ export interface RawReviewEventSummary {
 }
 
 export interface CanonicalLabelSummary {
-  total_labeled_records: number
-  malicious_records: number
-  benign_records: number
-  unlabeled_records: number
+  total_labeled_targets: number
+  malicious_targets: number
+  benign_targets: number
+  unlabeled_targets: number
   derived_from: CanonicalLabelSource
 }
 
 export interface WorkflowStatusSummary {
-  unreviewed_records: number
-  needs_review_records: number
-  resolved_records: number
+  unreviewed_targets: number
+  needs_review_targets: number
+  resolved_targets: number
+}
+
+export interface ReviewTargetSummary {
+  total_targets: number
+  package_finding_targets: number
+  edge_finding_targets: number
 }
 
 export interface EvaluationSummary {
   total_scans: number
+  review_targets: ReviewTargetSummary
   raw_review_events: RawReviewEventSummary
   canonical_labels: CanonicalLabelSummary
   workflow_status: WorkflowStatusSummary
