@@ -12,7 +12,7 @@ test('evaluation renderer surfaces raw events and derived canonical labels', () 
 
   assert.match(plainText, /Raw review events:/)
   assert.match(plainText, /Review targets:/)
-  assert.match(plainText, /Canonical labels \(derived from latest_label_bearing_event\):/)
+  assert.match(plainText, /Canonical labels \(source precedence, then latest within source\):/)
   assert.match(plainText, /- total: 3/)
   assert.match(plainText, /- labeled targets: 2/)
   assert.match(plainText, /Workflow status:/)
@@ -71,7 +71,7 @@ function createSummary(): EvaluationSummary {
       malicious_targets: 1,
       benign_targets: 1,
       unlabeled_targets: 1,
-      derived_from: 'latest_label_bearing_event',
+      derived_from: 'source_precedence_then_latest_within_source',
     },
     workflow_status: {
       unreviewed_targets: 1,

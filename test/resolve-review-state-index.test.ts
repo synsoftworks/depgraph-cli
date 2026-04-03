@@ -33,20 +33,39 @@ test('resolveReviewStateIndex derives canonical labels from raw review history',
   assert.equal(resolvedReviewStateIndex.get(reviewTargetScopeKey(record2Target))?.canonical_label, 'malicious')
 })
 
+test('resolveReviewStateIndex applies source precedence before recency for canonical labels', async () => {
+  const recordTarget = createReviewTarget('record-1')
+  const resolveReviewStateIndex = createResolveReviewStateIndexUseCase({
+    reviewEventSource: new InMemoryReviewEventSource([
+      createReviewEvent(recordTarget, 'malicious', '2026-04-01T00:00:00.000Z', 'human'),
+      createReviewEvent(recordTarget, 'benign', '2026-04-02T00:00:00.000Z', 'auto'),
+      createReviewEvent(recordTarget, 'needs_review', '2026-04-03T00:00:00.000Z', 'auto'),
+    ]),
+  })
+
+  const resolvedReviewStateIndex = await resolveReviewStateIndex()
+  const state = resolvedReviewStateIndex.get(reviewTargetScopeKey(recordTarget))
+
+  assert.equal(state?.workflow_status, 'needs_review')
+  assert.equal(state?.canonical_label, 'malicious')
+  assert.equal(state?.canonical_label_event?.review_source, 'human')
+})
+
 function createReviewEvent(
   reviewTarget: ReviewTarget,
   outcome: ReviewEvent['outcome'],
   createdAt: string,
+  reviewSource: ReviewEvent['review_source'] = 'human',
 ): ReviewEvent {
   return {
-    event_id: `${createdAt}:${reviewTarget.target_id}:${outcome}`,
+    event_id: `${createdAt}:${reviewTarget.target_id}:${reviewSource}:${outcome}`,
     record_id: reviewTarget.record_id,
     review_target: reviewTarget,
     created_at: createdAt,
     outcome,
     notes: null,
     resolution_timestamp: outcome === 'needs_review' ? null : createdAt,
-    review_source: 'human',
+    review_source: reviewSource,
     confidence: 0.9,
   }
 }

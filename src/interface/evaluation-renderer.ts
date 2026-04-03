@@ -19,7 +19,7 @@ export function renderEvaluationPlainText(summary: EvaluationSummary): string {
     `- benign: ${summary.raw_review_events.benign_events}`,
     `- needs_review: ${summary.raw_review_events.needs_review_events}`,
     '',
-    `Canonical labels (derived from ${summary.canonical_labels.derived_from}):`,
+    `Canonical labels (${formatDerivedFrom(summary.canonical_labels.derived_from)}):`,
     `- labeled targets: ${summary.canonical_labels.total_labeled_targets}`,
     `- malicious: ${summary.canonical_labels.malicious_targets}`,
     `- benign: ${summary.canonical_labels.benign_targets}`,
@@ -77,4 +77,11 @@ function renderCoverageSignals(
   }
 
   return lines
+}
+
+function formatDerivedFrom(derivedFrom: EvaluationSummary['canonical_labels']['derived_from']): string {
+  switch (derivedFrom) {
+    case 'source_precedence_then_latest_within_source':
+      return 'source precedence, then latest within source'
+  }
 }

@@ -144,6 +144,7 @@ export type ReviewTarget = PackageFindingReviewTarget | EdgeFindingReviewTarget
  * Review events are append-only source history.
  * They preserve raw review evidence, but they are not a safe label interface.
  * Any label-aware consumer must derive `ResolvedReviewTargetState` before using them.
+ * Canonical labels are not simple latest-wins projections of this history.
  */
 export interface ReviewEvent {
   event_id: string
@@ -159,18 +160,20 @@ export interface ReviewEvent {
 
 export type CanonicalLabel = 'malicious' | 'benign'
 export type WorkflowStatus = 'unreviewed' | 'needs_review' | 'resolved'
-export type CanonicalLabelSource = 'latest_label_bearing_event'
+// Current canonical-label policy: higher-trust sources win; recency only breaks ties within a source tier.
+export type CanonicalLabelSource = 'source_precedence_then_latest_within_source'
 
 /**
  * Resolved review state is the label-facing view of review history.
  * Canonical labels are derived from raw review events and must not be stored
- * or treated as mutable source-of-truth state.
+ * or treated as mutable source-of-truth state. Label derivation applies
+ * review-source precedence first, then recency within the same source tier.
  */
 export interface ResolvedReviewTargetState {
   record_id: string
   review_target: ReviewTarget
   latest_review_event: ReviewEvent | null
-  latest_label_bearing_event: ReviewEvent | null
+  canonical_label_event: ReviewEvent | null
   workflow_status: WorkflowStatus
   canonical_label: CanonicalLabel | null
   canonical_label_source: CanonicalLabelSource | null

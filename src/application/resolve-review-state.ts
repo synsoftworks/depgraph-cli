@@ -8,18 +8,20 @@ import { reviewTargetScopeKey } from '../domain/review-targets.js'
  *
  * Canonical review resolution keeps workflow state separate from label state:
  * - `needs_review` is workflow-bearing but not label-bearing
- * - the latest label-bearing event determines the canonical label
+ * - label-bearing events use source precedence: `human` > `external` > `auto`
+ * - within the same source tier, the latest label-bearing event wins
  * - the latest event overall determines the current workflow status
  *
  * This preserves append-only review history without letting unresolved workflow
- * events erase a previously resolved malicious or benign label.
+ * events erase a previously resolved malicious or benign label, and without
+ * letting lower-trust automated labels overwrite higher-trust human judgment.
  */
 export function resolveReviewStateFromEvents(
   reviewTarget: ReviewTarget,
   rawReviewEvents: ReviewEvent[],
 ): ResolvedReviewTargetState {
   let latestReviewEvent: ReviewEvent | null = null
-  let latestLabelBearingEvent: ReviewEvent | null = null
+  let canonicalLabelEvent: ReviewEvent | null = null
 
   for (const event of rawReviewEvents) {
     if (reviewTargetScopeKey(event.review_target) !== reviewTargetScopeKey(reviewTarget)) {
@@ -30,8 +32,8 @@ export function resolveReviewStateFromEvents(
       latestReviewEvent = event
     }
 
-    if (isLabelBearingEvent(event) && isMoreRecentEvent(event, latestLabelBearingEvent)) {
-      latestLabelBearingEvent = event
+    if (isLabelBearingEvent(event) && isHigherPriorityLabelEvent(event, canonicalLabelEvent)) {
+      canonicalLabelEvent = event
     }
   }
 
@@ -39,10 +41,11 @@ export function resolveReviewStateFromEvents(
     record_id: reviewTarget.record_id,
     review_target: reviewTarget,
     latest_review_event: latestReviewEvent,
-    latest_label_bearing_event: latestLabelBearingEvent,
+    canonical_label_event: canonicalLabelEvent,
     workflow_status: toWorkflowStatus(latestReviewEvent),
-    canonical_label: toCanonicalLabel(latestLabelBearingEvent),
-    canonical_label_source: latestLabelBearingEvent === null ? null : 'latest_label_bearing_event',
+    canonical_label: toCanonicalLabel(canonicalLabelEvent),
+    canonical_label_source:
+      canonicalLabelEvent === null ? null : 'source_precedence_then_latest_within_source',
   }
 }
 
@@ -92,7 +95,7 @@ export function getResolvedReviewState(
       record_id: reviewTarget.record_id,
       review_target: reviewTarget,
       latest_review_event: null,
-      latest_label_bearing_event: null,
+      canonical_label_event: null,
       workflow_status: 'unreviewed',
       canonical_label: null,
       canonical_label_source: null,
@@ -100,8 +103,29 @@ export function getResolvedReviewState(
   )
 }
 
+const REVIEW_SOURCE_PRIORITY: Record<ReviewEvent['review_source'], number> = {
+  auto: 0,
+  external: 1,
+  human: 2,
+}
+
 function isLabelBearingEvent(event: ReviewEvent): boolean {
   return event.outcome === 'malicious' || event.outcome === 'benign'
+}
+
+function isHigherPriorityLabelEvent(candidate: ReviewEvent, current: ReviewEvent | null): boolean {
+  if (current === null) {
+    return true
+  }
+
+  const candidatePriority = REVIEW_SOURCE_PRIORITY[candidate.review_source]
+  const currentPriority = REVIEW_SOURCE_PRIORITY[current.review_source]
+
+  if (candidatePriority !== currentPriority) {
+    return candidatePriority > currentPriority
+  }
+
+  return isMoreRecentEvent(candidate, current)
 }
 
 function toWorkflowStatus(
