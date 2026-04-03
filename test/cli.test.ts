@@ -121,7 +121,7 @@ function createEvaluationSummary(): EvaluationSummary {
       malicious_targets: 1,
       benign_targets: 1,
       unlabeled_targets: 1,
-      derived_from: 'latest_label_bearing_event',
+      derived_from: 'source_precedence_then_latest_within_source',
     },
     workflow_status: {
       unreviewed_targets: 1,

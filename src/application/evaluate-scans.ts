@@ -139,7 +139,7 @@ export function createEvaluateScansUseCase({
         malicious_targets: canonicalMaliciousTargets,
         benign_targets: canonicalBenignTargets,
         unlabeled_targets: totalTargets - (canonicalMaliciousTargets + canonicalBenignTargets),
-        derived_from: 'latest_label_bearing_event',
+        derived_from: 'source_precedence_then_latest_within_source',
       },
       workflow_status: {
         unreviewed_targets: unreviewedTargets,
