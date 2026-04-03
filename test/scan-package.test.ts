@@ -12,13 +12,22 @@ import type {
 } from '../src/domain/contracts.js'
 import type { PackageNode } from '../src/domain/entities.js'
 import type {
-  DependencyTraverser,
+  PackageLockDependencyTraverser,
+  RegistryDependencyTraverser,
   RiskScorer,
   ScanReviewStore,
   TraversedDependencyGraph,
 } from '../src/domain/ports.js'
 
-class StubTraverser implements DependencyTraverser {
+class StubRegistryTraverser implements RegistryDependencyTraverser {
+  constructor(private readonly graph: TraversedDependencyGraph) {}
+
+  async traverse(): Promise<TraversedDependencyGraph> {
+    return this.graph
+  }
+}
+
+class StubPackageLockTraverser implements PackageLockDependencyTraverser {
   constructor(private readonly graph: TraversedDependencyGraph) {}
 
   async traverse(): Promise<TraversedDependencyGraph> {
@@ -75,6 +84,7 @@ class InMemoryReviewStore implements ScanReviewStore {
       const record = this.records[index]
 
       if (
+        record?.baseline_identity.scan_mode === baselineIdentity.scan_mode &&
         record?.baseline_identity.scan_target === baselineIdentity.scan_target &&
         record.baseline_identity.requested_depth === baselineIdentity.requested_depth &&
         record.baseline_identity.workspace_identity === baselineIdentity.workspace_identity
@@ -123,7 +133,62 @@ function createMetadata(name: string, version: string): PackageMetadata {
 test('scan use case orders findings by depth, score, then lexical key', async () => {
   const reviewStore = new InMemoryReviewStore()
   const scanPackage = createScanPackageUseCase({
-    traverser: new StubTraverser({
+    registryTraverser: new StubRegistryTraverser({
+      root_key: 'root@1.0.0',
+      nodes: [
+        {
+          key: 'root@1.0.0',
+          package: { name: 'root', version: '1.0.0' },
+          metadata: createMetadata('root', '1.0.0'),
+          depth: 0,
+          parent_key: null,
+          path: {
+            packages: [{ name: 'root', version: '1.0.0' }],
+          },
+        },
+        {
+          key: 'beta@1.0.0',
+          package: { name: 'beta', version: '1.0.0' },
+          metadata: createMetadata('beta', '1.0.0'),
+          depth: 1,
+          parent_key: 'root@1.0.0',
+          path: {
+            packages: [
+              { name: 'root', version: '1.0.0' },
+              { name: 'beta', version: '1.0.0' },
+            ],
+          },
+        },
+        {
+          key: 'alpha@1.0.0',
+          package: { name: 'alpha', version: '1.0.0' },
+          metadata: createMetadata('alpha', '1.0.0'),
+          depth: 1,
+          parent_key: 'root@1.0.0',
+          path: {
+            packages: [
+              { name: 'root', version: '1.0.0' },
+              { name: 'alpha', version: '1.0.0' },
+            ],
+          },
+        },
+        {
+          key: 'gamma@1.0.0',
+          package: { name: 'gamma', version: '1.0.0' },
+          metadata: createMetadata('gamma', '1.0.0'),
+          depth: 2,
+          parent_key: 'beta@1.0.0',
+          path: {
+            packages: [
+              { name: 'root', version: '1.0.0' },
+              { name: 'beta', version: '1.0.0' },
+              { name: 'gamma', version: '1.0.0' },
+            ],
+          },
+        },
+      ],
+    }),
+    packageLockTraverser: new StubPackageLockTraverser({
       root_key: 'root@1.0.0',
       nodes: [
         {
@@ -189,6 +254,7 @@ test('scan use case orders findings by depth, score, then lexical key', async ()
   })
 
   const result = await scanPackage({
+    scan_mode: 'registry_package',
     package_spec: 'root',
     max_depth: 3,
     threshold: 0.4,
@@ -208,7 +274,35 @@ test('scan use case orders findings by depth, score, then lexical key', async ()
 test('threshold changes suspicious classification without changing raw scores', async () => {
   const reviewStore = new InMemoryReviewStore()
   const scanPackage = createScanPackageUseCase({
-    traverser: new StubTraverser({
+    registryTraverser: new StubRegistryTraverser({
+      root_key: 'root@1.0.0',
+      nodes: [
+        {
+          key: 'root@1.0.0',
+          package: { name: 'root', version: '1.0.0' },
+          metadata: createMetadata('root', '1.0.0'),
+          depth: 0,
+          parent_key: null,
+          path: {
+            packages: [{ name: 'root', version: '1.0.0' }],
+          },
+        },
+        {
+          key: 'child@1.0.0',
+          package: { name: 'child', version: '1.0.0' },
+          metadata: createMetadata('child', '1.0.0'),
+          depth: 1,
+          parent_key: 'root@1.0.0',
+          path: {
+            packages: [
+              { name: 'root', version: '1.0.0' },
+              { name: 'child', version: '1.0.0' },
+            ],
+          },
+        },
+      ],
+    }),
+    packageLockTraverser: new StubPackageLockTraverser({
       root_key: 'root@1.0.0',
       nodes: [
         {
@@ -245,12 +339,14 @@ test('threshold changes suspicious classification without changing raw scores', 
   })
 
   const reviewThreshold = await scanPackage({
+    scan_mode: 'registry_package',
     package_spec: 'root',
     max_depth: 3,
     threshold: 0.4,
     verbose: false,
   })
   const stricterThreshold = await scanPackage({
+    scan_mode: 'registry_package',
     package_spec: 'root',
     max_depth: 3,
     threshold: 0.6,
@@ -267,7 +363,7 @@ test('threshold changes suspicious classification without changing raw scores', 
 test('scan use case persists a durable scan review record after the scan completes', async () => {
   const reviewStore = new InMemoryReviewStore()
   const scanPackage = createScanPackageUseCase({
-    traverser: new StubTraverser({
+    registryTraverser: new StubRegistryTraverser({
       root_key: 'root@1.0.0',
       nodes: [
         {
@@ -295,6 +391,21 @@ test('scan use case persists a durable scan review record after the scan complet
         },
       ],
     }),
+    packageLockTraverser: new StubPackageLockTraverser({
+      root_key: 'root@1.0.0',
+      nodes: [
+        {
+          key: 'root@1.0.0',
+          package: { name: 'root', version: '1.0.0' },
+          metadata: createMetadata('root', '1.0.0'),
+          depth: 0,
+          parent_key: null,
+          path: {
+            packages: [{ name: 'root', version: '1.0.0' }],
+          },
+        },
+      ],
+    }),
     scorer: new StubScorer({
       'root@1.0.0': 0.1,
       'child@1.0.0': 0.8,
@@ -304,6 +415,7 @@ test('scan use case persists a durable scan review record after the scan complet
   })
 
   await scanPackage({
+    scan_mode: 'registry_package',
     package_spec: 'root',
     max_depth: 3,
     threshold: 0.4,
@@ -314,15 +426,17 @@ test('scan use case persists a durable scan review record after the scan complet
   assert.deepEqual(reviewStore.records[0], {
     record_id: '2026-04-01T00:00:00.000Z:root@1.0.0:depth=3',
     created_at: '2026-04-01T00:00:00.000Z',
+    scan_mode: 'registry_package',
     package: { name: 'root', version: '1.0.0' },
     package_key: 'root@1.0.0',
     scan_target: 'root',
     baseline_identity: {
+      scan_mode: 'registry_package',
       scan_target: 'root',
       requested_depth: 3,
       workspace_identity: 'local',
     },
-    baseline_key: 'root::depth=3::workspace=local',
+    baseline_key: 'registry_package::root::depth=3::workspace=local',
     baseline_record_id: null,
     requested_depth: 3,
     threshold: 0.4,
@@ -367,6 +481,7 @@ test('scan use case persists a durable scan review record after the scan complet
       version: '1.0.0',
       key: 'root@1.0.0',
       depth: 0,
+      is_project_root: false,
       age_days: 31,
       weekly_downloads: 1000,
       dependents_count: null,
@@ -389,6 +504,7 @@ test('scan use case persists a durable scan review record after the scan complet
           version: '1.0.0',
           key: 'child@1.0.0',
           depth: 1,
+          is_project_root: false,
           age_days: 31,
           weekly_downloads: 1000,
           dependents_count: null,
@@ -434,7 +550,8 @@ test('scan use case persists a durable scan review record after the scan complet
 test('projected dependency edge delta is omitted when there is no prior scan', async () => {
   const reviewStore = new InMemoryReviewStore()
   const scanPackage = createScanPackageUseCase({
-    traverser: new StubTraverser(createLinearGraph()),
+    registryTraverser: new StubRegistryTraverser(createLinearGraph()),
+    packageLockTraverser: new StubPackageLockTraverser(createLinearGraph()),
     scorer: new StubScorer({
       'root@1.0.0': 0.1,
       'child@1.0.0': 0,
@@ -444,6 +561,7 @@ test('projected dependency edge delta is omitted when there is no prior scan', a
   })
 
   const result = await scanPackage({
+    scan_mode: 'registry_package',
     package_spec: 'root',
     max_depth: 3,
     threshold: 0.4,
@@ -465,7 +583,8 @@ test('projected dependency edge delta is omitted when the prior scan has identic
     }),
   ])
   const scanPackage = createScanPackageUseCase({
-    traverser: new StubTraverser(createLinearGraph()),
+    registryTraverser: new StubRegistryTraverser(createLinearGraph()),
+    packageLockTraverser: new StubPackageLockTraverser(createLinearGraph()),
     scorer: new StubScorer({
       'root@1.0.0': 0.1,
       'child@1.0.0': 0,
@@ -475,6 +594,7 @@ test('projected dependency edge delta is omitted when the prior scan has identic
   })
 
   const result = await scanPackage({
+    scan_mode: 'registry_package',
     package_spec: 'root',
     max_depth: 3,
     threshold: 0.4,
@@ -496,7 +616,49 @@ test('projected dependency edge delta records newly introduced edges against the
     }),
   ])
   const scanPackage = createScanPackageUseCase({
-    traverser: new StubTraverser({
+    registryTraverser: new StubRegistryTraverser({
+      root_key: 'root@1.0.0',
+      nodes: [
+        {
+          key: 'root@1.0.0',
+          package: { name: 'root', version: '1.0.0' },
+          metadata: createMetadata('root', '1.0.0'),
+          depth: 0,
+          parent_key: null,
+          path: {
+            packages: [{ name: 'root', version: '1.0.0' }],
+          },
+        },
+        {
+          key: 'child@1.0.0',
+          package: { name: 'child', version: '1.0.0' },
+          metadata: createMetadata('child', '1.0.0'),
+          depth: 1,
+          parent_key: 'root@1.0.0',
+          path: {
+            packages: [
+              { name: 'root', version: '1.0.0' },
+              { name: 'child', version: '1.0.0' },
+            ],
+          },
+        },
+        {
+          key: 'grandchild@1.0.0',
+          package: { name: 'grandchild', version: '1.0.0' },
+          metadata: createMetadata('grandchild', '1.0.0'),
+          depth: 2,
+          parent_key: 'child@1.0.0',
+          path: {
+            packages: [
+              { name: 'root', version: '1.0.0' },
+              { name: 'child', version: '1.0.0' },
+              { name: 'grandchild', version: '1.0.0' },
+            ],
+          },
+        },
+      ],
+    }),
+    packageLockTraverser: new StubPackageLockTraverser({
       root_key: 'root@1.0.0',
       nodes: [
         {
@@ -548,6 +710,7 @@ test('projected dependency edge delta records newly introduced edges against the
   })
 
   const result = await scanPackage({
+    scan_mode: 'registry_package',
     package_spec: 'root',
     max_depth: 3,
     threshold: 0.4,
@@ -580,7 +743,8 @@ test('projected dependency edge delta lookup degrades gracefully when history lo
   reviewStore.failLookup = true
 
   const scanPackage = createScanPackageUseCase({
-    traverser: new StubTraverser(createLinearGraph()),
+    registryTraverser: new StubRegistryTraverser(createLinearGraph()),
+    packageLockTraverser: new StubPackageLockTraverser(createLinearGraph()),
     scorer: new StubScorer({
       'root@1.0.0': 0.1,
       'child@1.0.0': 0,
@@ -590,6 +754,7 @@ test('projected dependency edge delta lookup degrades gracefully when history lo
   })
 
   const result = await scanPackage({
+    scan_mode: 'registry_package',
     package_spec: 'root',
     max_depth: 3,
     threshold: 0.4,
@@ -608,7 +773,8 @@ test('baseline identity requires matching workspace identity before applying del
     }),
   ])
   const scanPackage = createScanPackageUseCase({
-    traverser: new StubTraverser(createLinearGraph()),
+    registryTraverser: new StubRegistryTraverser(createLinearGraph()),
+    packageLockTraverser: new StubPackageLockTraverser(createLinearGraph()),
     scorer: new StubScorer({
       'root@1.0.0': 0.1,
       'child@1.0.0': 0,
@@ -618,6 +784,7 @@ test('baseline identity requires matching workspace identity before applying del
   })
 
   const result = await scanPackage({
+    scan_mode: 'registry_package',
     package_spec: 'root',
     max_depth: 3,
     threshold: 0.4,
@@ -627,6 +794,120 @@ test('baseline identity requires matching workspace identity before applying del
 
   assert.equal(result.baseline_record_id, null)
   assert.deepEqual(result.edge_findings, [])
+})
+
+test('package_lock scans persist their scan_mode and do not diff against registry_package history', async () => {
+  const reviewStore = new InMemoryReviewStore([
+    createStoredRecord({
+      dependencyEdges: [{ from: 'root@1.0.0', to: 'child@1.0.0', child_depth: 1 }],
+      scanMode: 'registry_package',
+      workspaceIdentity: 'local',
+    }),
+  ])
+  const scanPackage = createScanPackageUseCase({
+    registryTraverser: new StubRegistryTraverser(createLinearGraph()),
+    packageLockTraverser: new StubPackageLockTraverser(createLinearGraph()),
+    scorer: new StubScorer({
+      'root@1.0.0': 0.1,
+      'child@1.0.0': 0,
+    }),
+    reviewStore,
+    now: () => new Date('2026-04-01T00:00:00.000Z'),
+  })
+
+  const result = await scanPackage({
+    scan_mode: 'package_lock',
+    package_lock_path: '/tmp/project/package-lock.json',
+    project_root: '/tmp/project',
+    max_depth: 3,
+    threshold: 0.4,
+    verbose: false,
+    workspace_identity: 'local',
+  })
+
+  assert.equal(result.scan_mode, 'package_lock')
+  assert.equal(result.baseline_record_id, null)
+  assert.deepEqual(result.edge_findings, [])
+  assert.equal(reviewStore.records.at(-1)?.scan_mode, 'package_lock')
+  assert.equal(reviewStore.records.at(-1)?.baseline_identity.scan_mode, 'package_lock')
+})
+
+test('package_lock scans keep synthetic project-root metadata explicit and persist enriched dependency metadata consistently', async () => {
+  const reviewStore = new InMemoryReviewStore()
+  const scanPackage = createScanPackageUseCase({
+    registryTraverser: new StubRegistryTraverser(createLinearGraph()),
+    packageLockTraverser: new StubPackageLockTraverser({
+      root_key: 'project@1.0.0',
+      nodes: [
+        {
+          key: 'project@1.0.0',
+          package: { name: 'project', version: '1.0.0' },
+          metadata: createMetadata('project', '1.0.0'),
+          depth: 0,
+          parent_key: null,
+          path: {
+            packages: [{ name: 'project', version: '1.0.0' }],
+          },
+          is_virtual_root: true,
+        },
+        {
+          key: 'child@1.2.3',
+          package: { name: 'child', version: '1.2.3' },
+          metadata: {
+            ...createMetadata('child', '1.2.3'),
+            weekly_downloads: 3210,
+            dependents_count: 77,
+            published_at: '2026-03-15T00:00:00.000Z',
+            first_published_at: '2026-01-10T00:00:00.000Z',
+            last_published_at: '2026-03-20T00:00:00.000Z',
+            total_versions: 9,
+            publish_events_last_30_days: 2,
+          },
+          depth: 1,
+          parent_key: 'project@1.0.0',
+          path: {
+            packages: [
+              { name: 'project', version: '1.0.0' },
+              { name: 'child', version: '1.2.3' },
+            ],
+          },
+        },
+      ],
+    }),
+    scorer: new StubScorer({
+      'child@1.2.3': 0.1,
+    }),
+    reviewStore,
+    now: () => new Date('2026-04-01T00:00:00.000Z'),
+  })
+
+  const result = await scanPackage({
+    scan_mode: 'package_lock',
+    package_lock_path: '/tmp/project/package-lock.json',
+    project_root: '/tmp/project',
+    max_depth: 3,
+    threshold: 0.4,
+    verbose: false,
+    workspace_identity: 'local',
+  })
+
+  assert.equal(result.root.is_project_root, true)
+  assert.equal(result.root.age_days, null)
+  assert.equal(result.root.published_at, null)
+  assert.equal(result.root.first_published, null)
+  assert.equal(result.root.last_published, null)
+  assert.equal(result.root.total_versions, null)
+  assert.equal(result.root.publish_events_last_30_days, null)
+  assert.equal(result.root.weekly_downloads, null)
+
+  assert.deepEqual(result.root.dependencies[0], reviewStore.records[0]?.root.dependencies[0])
+  assert.equal(result.root.dependencies[0]?.weekly_downloads, 3210)
+  assert.equal(result.root.dependencies[0]?.dependents_count, 77)
+  assert.equal(result.root.dependencies[0]?.published_at, '2026-03-15T00:00:00.000Z')
+  assert.equal(result.root.dependencies[0]?.first_published, '2026-01-10T00:00:00.000Z')
+  assert.equal(result.root.dependencies[0]?.last_published, '2026-03-20T00:00:00.000Z')
+  assert.equal(result.root.dependencies[0]?.total_versions, 9)
+  assert.equal(result.root.dependencies[0]?.publish_events_last_30_days, 2)
 })
 
 function createLinearGraph(): TraversedDependencyGraph {
@@ -662,9 +943,11 @@ function createLinearGraph(): TraversedDependencyGraph {
 
 function createStoredRecord({
   dependencyEdges,
+  scanMode = 'registry_package',
   workspaceIdentity = 'local',
 }: {
   dependencyEdges: DependencyGraphEdge[]
+  scanMode?: ScanReviewRecord['scan_mode']
   workspaceIdentity?: string
 }): ScanReviewRecord {
   const root = createStoredPackageNode()
@@ -672,15 +955,17 @@ function createStoredRecord({
   return {
     record_id: '2026-03-31T00:00:00.000Z:root@1.0.0:depth=3',
     created_at: '2026-03-31T00:00:00.000Z',
+    scan_mode: scanMode,
     package: { name: 'root', version: '1.0.0' },
     package_key: 'root@1.0.0',
     scan_target: 'root',
     baseline_identity: {
+      scan_mode: scanMode,
       scan_target: 'root',
       requested_depth: 3,
       workspace_identity: workspaceIdentity,
     },
-    baseline_key: `root::depth=3::workspace=${workspaceIdentity}`,
+    baseline_key: `${scanMode}::root::depth=3::workspace=${workspaceIdentity}`,
     baseline_record_id: null,
     requested_depth: 3,
     threshold: 0.4,
@@ -730,6 +1015,7 @@ function createEdgeFinding({
     },
     baseline_record_id: baselineRecordId,
     baseline_identity: {
+      scan_mode: 'registry_package',
       scan_target: 'root',
       requested_depth: 3,
       workspace_identity: 'local',
@@ -745,6 +1031,7 @@ function createStoredPackageNode(): PackageNode {
     version: '1.0.0',
     key: 'root@1.0.0',
     depth: 0,
+    is_project_root: false,
     age_days: 31,
     weekly_downloads: 1000,
     dependents_count: null,

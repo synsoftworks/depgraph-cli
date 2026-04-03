@@ -67,7 +67,7 @@ export function createEvaluateScansUseCase({
 
     for (const record of scanRecords) {
       // This is feature-surface observability for the dataset, not a quality metric.
-      for (const node of flattenNodes(record.root)) {
+      for (const node of flattenMetadataNodes(record.root)) {
         totalNodes += 1
 
         if (node.weekly_downloads === null) {
@@ -167,8 +167,14 @@ function listReviewTargets(record: Awaited<ReturnType<ScanReviewStore['listScanR
   ]
 }
 
-function flattenNodes(root: PackageNode): PackageNode[] {
-  return [root, ...root.dependencies.flatMap(flattenNodes)]
+function flattenMetadataNodes(root: PackageNode): PackageNode[] {
+  const descendants = root.dependencies.flatMap(flattenMetadataNodes)
+
+  if (root.is_project_root) {
+    return descendants
+  }
+
+  return [root, ...descendants]
 }
 
 function collectSignals(signals: RiskSignal[], counts: Map<string, number>): void {

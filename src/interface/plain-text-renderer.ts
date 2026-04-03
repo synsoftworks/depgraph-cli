@@ -3,6 +3,8 @@ import type { PackageNode, ScanResult } from '../domain/entities.js'
 export function renderPlainText(result: ScanResult): string {
   const lines = [
     `Scan: ${result.root.key}`,
+    `Mode: ${result.scan_mode}`,
+    `Target: ${result.scan_target}`,
     `Record: ${result.record_id}`,
     `Overall risk: ${result.overall_risk_level} (${result.overall_risk_score.toFixed(2)})`,
     `Total scanned: ${result.total_scanned}`,
@@ -49,7 +51,7 @@ export function renderPlainText(result: ScanResult): string {
 function renderTree(node: PackageNode, prefix = '', isLast = true): string[] {
   const connector = prefix.length === 0 ? '-' : isLast ? '└─' : '├─'
   const lines = [
-    `${prefix}${connector} ${node.key} [${node.risk_level} ${node.risk_score.toFixed(2)}]`,
+    `${prefix}${connector} ${node.key}${node.is_project_root ? ' [project root]' : ''} [${node.risk_level} ${node.risk_score.toFixed(2)}]`,
   ]
   const childPrefix = prefix.length === 0 ? '  ' : `${prefix}${isLast ? '  ' : '│ '}`
 

@@ -1,7 +1,7 @@
 import type { PackageSpec } from '../domain/contracts.js'
 import type {
-  DependencyTraverser,
   PackageMetadataSource,
+  RegistryDependencyTraverser as RegistryDependencyTraverserPort,
   TraversedDependencyGraph,
   TraversedPackageNode,
 } from '../domain/ports.js'
@@ -14,7 +14,7 @@ interface QueueItem {
   path_packages: TraversedPackageNode['path']['packages']
 }
 
-export class RegistryDependencyTraverser implements DependencyTraverser {
+export class RegistryDependencyTraverser implements RegistryDependencyTraverserPort {
   constructor(private readonly metadataSource: PackageMetadataSource) {}
 
   async traverse(root: PackageSpec, max_depth: number): Promise<TraversedDependencyGraph> {

@@ -1,4 +1,6 @@
-import type { BaselineIdentity, PackageSpec, ResolvedPackage } from './contracts.js'
+import { basename } from 'node:path'
+
+import type { BaselineIdentity, PackageSpec, ResolvedPackage, ScanMode } from './contracts.js'
 import type { Recommendation, RiskLevel, RiskSignal } from './entities.js'
 import { InvalidUsageError } from './errors.js'
 
@@ -89,11 +91,13 @@ export function normalizeScanTarget(input: string): string {
 }
 
 export function baselineIdentityForScan(
+  scanMode: ScanMode,
   scanTarget: string,
   requestedDepth: number,
   workspaceIdentity = 'local',
 ): BaselineIdentity {
   return {
+    scan_mode: scanMode,
     scan_target: scanTarget,
     requested_depth: requestedDepth,
     workspace_identity: workspaceIdentity.trim().length > 0 ? workspaceIdentity : 'local',
@@ -101,7 +105,23 @@ export function baselineIdentityForScan(
 }
 
 export function baselineKeyForIdentity(identity: BaselineIdentity): string {
-  return `${identity.scan_target}::depth=${identity.requested_depth}::workspace=${identity.workspace_identity}`
+  return `${identity.scan_mode}::${identity.scan_target}::depth=${identity.requested_depth}::workspace=${identity.workspace_identity}`
+}
+
+export function normalizeProjectScanTarget(projectName: string | undefined, projectRoot: string): string {
+  const trimmedName = projectName?.trim() ?? ''
+
+  if (trimmedName.length > 0) {
+    return trimmedName
+  }
+
+  const fallback = basename(projectRoot).trim()
+
+  if (fallback.length > 0) {
+    return fallback
+  }
+
+  throw new InvalidUsageError('Project scan target could not be resolved from package-lock.json.')
 }
 
 export function parsePackageKey(input: string): ResolvedPackage {

@@ -40,6 +40,7 @@ test('JSONL scan review store appends records and retrieves the latest matching 
   )
 
   const latest = await store.findLatestScanByBaseline({
+    scan_mode: 'registry_package',
     scan_target: 'root',
     requested_depth: 3,
     workspace_identity: workingDirectory,
@@ -79,6 +80,44 @@ test('JSONL scan review store appends review events without rewriting scan recor
   assert.equal(reviewEvents[0]?.review_target.target_id, 'package_finding:root@1.0.0')
 })
 
+test('JSONL scan review store keeps baseline lookup separated by scan_mode', async () => {
+  const workingDirectory = await mkdtemp(join(tmpdir(), 'depgraph-jsonl-'))
+  const paths = defaultScanReviewStorePaths(workingDirectory)
+  const store = new JsonlScanReviewStore(paths)
+
+  await store.appendScanRecord(
+    createRecord({
+      recordId: 'registry-record',
+      createdAt: '2026-04-01T00:00:00.000Z',
+      scanTarget: 'root',
+      packageKey: 'root@1.0.0',
+      workspaceIdentity: workingDirectory,
+      dependencyEdges: [],
+      scanMode: 'registry_package',
+    }),
+  )
+  await store.appendScanRecord(
+    createRecord({
+      recordId: 'lock-record',
+      createdAt: '2026-04-02T00:00:00.000Z',
+      scanTarget: 'root',
+      packageKey: 'root@1.0.0',
+      workspaceIdentity: workingDirectory,
+      dependencyEdges: [],
+      scanMode: 'package_lock',
+    }),
+  )
+
+  const latestPackageLock = await store.findLatestScanByBaseline({
+    scan_mode: 'package_lock',
+    scan_target: 'root',
+    requested_depth: 3,
+    workspace_identity: workingDirectory,
+  })
+
+  assert.equal(latestPackageLock?.record_id, 'lock-record')
+})
+
 test('JSONL scan review store upgrades legacy review events into explicit package-finding targets', async () => {
   const workingDirectory = await mkdtemp(join(tmpdir(), 'depgraph-jsonl-'))
   const paths = defaultScanReviewStorePaths(workingDirectory)
@@ -110,6 +149,7 @@ function createRecord({
   packageKey,
   workspaceIdentity,
   dependencyEdges,
+  scanMode = 'registry_package',
 }: {
   recordId: string
   createdAt: string
@@ -117,19 +157,22 @@ function createRecord({
   packageKey: string
   workspaceIdentity: string
   dependencyEdges: DependencyGraphEdge[]
+  scanMode?: ScanReviewRecord['scan_mode']
 }): ScanReviewRecord {
   return {
     record_id: recordId,
     created_at: createdAt,
+    scan_mode: scanMode,
     package: { name: 'root', version: packageKey.split('@').at(-1) ?? '1.0.0' },
     package_key: packageKey,
     scan_target: scanTarget,
     baseline_identity: {
+      scan_mode: scanMode,
       scan_target: scanTarget,
       requested_depth: 3,
       workspace_identity: workspaceIdentity,
     },
-    baseline_key: `${scanTarget}::depth=3::workspace=${workspaceIdentity}`,
+    baseline_key: `${scanMode}::${scanTarget}::depth=3::workspace=${workspaceIdentity}`,
     baseline_record_id: null,
     requested_depth: 3,
     threshold: 0.4,
@@ -142,6 +185,7 @@ function createRecord({
       version: packageKey.split('@').at(-1) ?? '1.0.0',
       key: packageKey,
       depth: 0,
+      is_project_root: false,
       age_days: 1,
       weekly_downloads: 1000,
       dependents_count: null,
