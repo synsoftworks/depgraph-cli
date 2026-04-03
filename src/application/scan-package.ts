@@ -104,18 +104,6 @@ export function createScanPackageUseCase({
       }
 
       const packageNode = toPackageNode(traversedNode, assessment, startedAt)
-      if (traversedNode.metadata_status === 'unresolved_registry_lookup') {
-        warnings.push({
-          kind: 'unresolved_registry_lookup',
-          package_key: traversedNode.key,
-          package_name: traversedNode.package.name,
-          package_version: traversedNode.package.version,
-          message: traversedNode.metadata_warning ?? 'Registry enrichment was unavailable.',
-          lockfile_resolved_url: traversedNode.lockfile_resolved_url,
-          lockfile_integrity: traversedNode.lockfile_integrity,
-        })
-      }
-
       if (metadataStatusForNode(traversedNode) === 'unresolved_registry_lookup') {
         warnings.push({
           kind: 'unresolved_registry_lookup',
