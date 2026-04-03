@@ -134,19 +134,6 @@ DepGraph now persists repo-local history under `.depgraph/`:
 
 This keeps the local dataset inspectable, scriptable, and cheap to evolve without introducing a database yet.
 
-## Current Scope
-
-DepGraph is an MVP focused on npm registry metadata and dependency graph traversal.
-
-Current limitations:
-
-- no lockfile scanning yet
-- no tarball or source inspection
-- no advisory database integration beyond package metadata
-- no sensitive import analysis yet
-- no learned or ML-based scoring yet
-- local dataset evaluation is intentionally basic today
-
 ## Roadmap
 
 - [x] npm package scanning MVP
