@@ -57,6 +57,8 @@ function ScanResultView({ result }: { result: ScanResult }): React.JSX.Element {
       </Box>
 
       <Box flexDirection="column" marginBottom={1}>
+        {result.warnings.length > 0 ? <WarningsPanel warnings={result.warnings} /> : null}
+
         {result.edge_findings.length > 0 ? (
           <ChangedEdgesPanel edgeFindings={result.edge_findings} />
         ) : null}
@@ -165,7 +167,40 @@ function TreeRow({
       </Text>
       <Text color="gray">{`@${node.version}`}</Text>
       {node.is_project_root ? <Text color="gray">{' · project root'}</Text> : null}
+      {node.metadata_status === 'unresolved_registry_lookup' ? (
+        <Text color="yellow">{' · registry metadata unavailable'}</Text>
+      ) : null}
       <RiskBadge level={node.risk_level} />
+    </Box>
+  )
+}
+
+function WarningsPanel({
+  warnings,
+}: {
+  warnings: ScanResult['warnings']
+}): React.JSX.Element {
+  return (
+    <Box marginBottom={1}>
+      <Box
+        flexDirection="column"
+        borderStyle="single"
+        borderColor="yellow"
+        paddingX={1}
+        paddingY={0}
+        width={PANEL_WIDTH}
+      >
+        <Text color="gray">WARNINGS</Text>
+        {warnings.map((warning) => (
+          <Box key={warning.package_key} flexDirection="column" marginBottom={1}>
+            <Text color="yellowBright">{warning.package_key}</Text>
+            <Text color="white">{warning.message}</Text>
+            {warning.lockfile_resolved_url !== null ? (
+              <Text color="gray">{warning.lockfile_resolved_url}</Text>
+            ) : null}
+          </Box>
+        ))}
+      </Box>
     </Box>
   )
 }

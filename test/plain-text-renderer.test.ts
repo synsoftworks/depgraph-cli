@@ -9,6 +9,8 @@ test('plain text renderer surfaces changed edges from the current tree projectio
 
   assert.match(output, /Mode: registry_package/)
   assert.match(output, /Target: root/)
+  assert.match(output, /Warnings: 1/)
+  assert.match(output, /root@1\.0\.0 \[unresolved_registry_lookup\] Registry metadata unavailable/)
   assert.match(output, /Changed edges in current tree view:/)
   assert.match(output, /root@1\.0\.0 -> child@1\.0\.0 \[direct\] via root@1\.0\.0 > child@1\.0\.0/)
   assert.match(output, /target: edge_finding:direct:root@1\.0\.0->child@1\.0\.0/)
@@ -29,6 +31,10 @@ function createResult(): ScanResult {
       key: 'root@1.0.0',
       depth: 0,
       is_project_root: false,
+      metadata_status: 'enriched',
+      metadata_warning: null,
+      lockfile_resolved_url: null,
+      lockfile_integrity: null,
       age_days: 10,
       weekly_downloads: 1000,
       dependents_count: null,
@@ -87,6 +93,17 @@ function createResult(): ScanResult {
     safe_count: 0,
     overall_risk_score: 0.64,
     overall_risk_level: 'review',
+    warnings: [
+      {
+        kind: 'unresolved_registry_lookup',
+        package_key: 'root@1.0.0',
+        package_name: 'root',
+        package_version: '1.0.0',
+        message: 'Registry metadata unavailable',
+        lockfile_resolved_url: 'https://vendor.example/root.tgz',
+        lockfile_integrity: null,
+      },
+    ],
     scan_duration_ms: 0,
     timestamp: '2026-04-01T00:00:00.000Z',
   }

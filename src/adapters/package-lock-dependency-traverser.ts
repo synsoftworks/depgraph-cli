@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises'
 import { basename, dirname, posix as pathPosix } from 'node:path'
 
 import type { PackageMetadata, PackageSpec } from '../domain/contracts.js'
-import { InvalidUsageError, StorageFailureError } from '../domain/errors.js'
+import { InvalidUsageError, NetworkFailureError, StorageFailureError } from '../domain/errors.js'
 import type {
   PackageLockDependencyTraverser as PackageLockDependencyTraverserPort,
   PackageMetadataSource,
@@ -23,6 +23,8 @@ interface PackageLockPackage {
   name?: string
   version?: string
   dependencies?: Record<string, string>
+  resolved?: string
+  integrity?: string
 }
 
 interface PackageLockDependency {
@@ -33,7 +35,9 @@ interface IndexedPackageEntry {
   path: string
   name: string
   version: string
-  dependencies: string[]
+  dependencies: Record<string, string>
+  resolved: string | null
+  integrity: string | null
 }
 
 interface QueueItem {
@@ -87,6 +91,13 @@ export class PackageLockDependencyTraverser implements PackageLockDependencyTrav
               this.metadataSource,
               item.package_name,
               item.package_version,
+            ).catch((error) =>
+              createUnresolvedPackageMetadata(
+                item.package_name,
+                item.package_version,
+                packageEntries.get(item.entry_path)?.dependencies ?? {},
+                error,
+              ),
             )
       const key = packageKey(metadata.package)
 
@@ -103,7 +114,12 @@ export class PackageLockDependencyTraverser implements PackageLockDependencyTrav
       nodes.push({
         key,
         package: metadata.package,
-        metadata,
+        metadata: metadata.metadata,
+        resolved_dependencies: metadata.resolved_dependencies,
+        metadata_status: metadata.metadata_status,
+        metadata_warning: metadata.metadata_warning,
+        lockfile_resolved_url: packageEntries.get(item.entry_path)?.resolved ?? null,
+        lockfile_integrity: packageEntries.get(item.entry_path)?.integrity ?? null,
         depth: item.depth,
         parent_key: item.parent_key,
         path,
@@ -117,7 +133,7 @@ export class PackageLockDependencyTraverser implements PackageLockDependencyTrav
       const dependencyNames =
         item.entry_path === ''
           ? rootDependencies
-          : packageEntries.get(item.entry_path)?.dependencies ?? []
+          : Object.keys(packageEntries.get(item.entry_path)?.dependencies ?? {})
 
       for (const dependencyName of dependencyNames) {
         const resolvedEntryPath = resolveDependencyEntryPath(
@@ -213,7 +229,9 @@ function indexPackageEntries(lockfile: PackageLockFile): Map<string, IndexedPack
       path: entryPath,
       name,
       version,
-      dependencies: Object.keys(entry.dependencies ?? {}),
+      dependencies: sortDependencies(entry.dependencies ?? {}),
+      resolved: entry.resolved?.trim() || null,
+      integrity: entry.integrity?.trim() || null,
     })
   }
 
@@ -252,8 +270,14 @@ function createSyntheticRootMetadata(
   rootPackage: PackageMetadata['package'],
   rootDependencies: string[],
   packageEntries: ReadonlyMap<string, IndexedPackageEntry>,
-): PackageMetadata {
-  const dependencies = Object.fromEntries(
+): {
+  package: PackageMetadata['package']
+  metadata: PackageMetadata
+  resolved_dependencies: Record<string, string>
+  metadata_status: 'synthetic_project_root'
+  metadata_warning: null
+} {
+  const resolvedDependencies = Object.fromEntries(
     rootDependencies.map((dependencyName) => {
       const entryPath = resolveDependencyEntryPath('', dependencyName, packageEntries)
       const resolvedVersion = entryPath === null ? '*' : packageEntries.get(entryPath)?.version ?? '*'
@@ -264,17 +288,23 @@ function createSyntheticRootMetadata(
 
   return {
     package: rootPackage,
-    dependencies,
-    published_at: SYNTHETIC_ROOT_PUBLISHED_AT,
-    first_published_at: SYNTHETIC_ROOT_PUBLISHED_AT,
-    last_published_at: SYNTHETIC_ROOT_PUBLISHED_AT,
-    total_versions: 1,
-    publish_events_last_30_days: 0,
-    weekly_downloads: null,
-    deprecated_message: null,
-    is_security_tombstone: false,
-    has_advisories: false,
-    dependents_count: null,
+    resolved_dependencies: resolvedDependencies,
+    metadata_status: 'synthetic_project_root',
+    metadata_warning: null,
+    metadata: {
+      package: rootPackage,
+      dependencies: resolvedDependencies,
+      published_at: SYNTHETIC_ROOT_PUBLISHED_AT,
+      first_published_at: SYNTHETIC_ROOT_PUBLISHED_AT,
+      last_published_at: SYNTHETIC_ROOT_PUBLISHED_AT,
+      total_versions: 1,
+      publish_events_last_30_days: 0,
+      weekly_downloads: null,
+      deprecated_message: null,
+      is_security_tombstone: false,
+      has_advisories: false,
+      dependents_count: null,
+    },
   }
 }
 
@@ -283,12 +313,26 @@ async function resolveExactPackageMetadata(
   metadataSource: PackageMetadataSource,
   packageName: string,
   packageVersion: string,
-): Promise<PackageMetadata> {
+): Promise<{
+  package: PackageMetadata['package']
+  metadata: PackageMetadata
+  resolved_dependencies: Record<string, string>
+  metadata_status: 'enriched'
+  metadata_warning: null
+}> {
   const key = `${packageName}@${packageVersion}`
   const existing = metadataCache.get(key)
 
   if (existing !== undefined) {
-    return existing
+    const metadata = await existing
+
+    return {
+      package: metadata.package,
+      metadata,
+      resolved_dependencies: metadata.dependencies,
+      metadata_status: 'enriched',
+      metadata_warning: null,
+    }
   }
 
   const metadataPromise = metadataSource.resolvePackage({
@@ -296,8 +340,15 @@ async function resolveExactPackageMetadata(
     version_range: packageVersion,
   })
   metadataCache.set(key, metadataPromise)
+  const metadata = await metadataPromise
 
-  return metadataPromise
+  return {
+    package: metadata.package,
+    metadata,
+    resolved_dependencies: metadata.dependencies,
+    metadata_status: 'enriched',
+    metadata_warning: null,
+  }
 }
 
 function resolvePackageEntryName(entryPath: string, entry: PackageLockPackage): string {
@@ -338,6 +389,42 @@ function resolveDependencyEntryPath(
   }
 
   return null
+}
+
+function createUnresolvedPackageMetadata(
+  packageName: string,
+  packageVersion: string,
+  resolvedDependencies: Record<string, string>,
+  error: unknown,
+): {
+  package: PackageMetadata['package']
+  metadata: null
+  resolved_dependencies: Record<string, string>
+  metadata_status: 'unresolved_registry_lookup'
+  metadata_warning: string
+} {
+  if (!(error instanceof NetworkFailureError || error instanceof InvalidUsageError)) {
+    throw error
+  }
+
+  return {
+    package: {
+      name: packageName,
+      version: packageVersion,
+    },
+    metadata: null,
+    resolved_dependencies: resolvedDependencies,
+    metadata_status: 'unresolved_registry_lookup',
+    metadata_warning: error.message,
+  }
+}
+
+function sortDependencies(
+  dependencies: Record<string, string>,
+): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(dependencies).sort(([left], [right]) => left.localeCompare(right)),
+  )
 }
 
 function parentPackagePath(packagePath: string): string | null {

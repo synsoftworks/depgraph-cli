@@ -4,6 +4,7 @@ import type {
   EdgeFinding,
   PackageLockScanRequest,
   RiskAssessment,
+  ScanWarning,
   ScanMode,
   ScanRequest,
   ScanReviewRecord,
@@ -92,6 +93,7 @@ export function createScanPackageUseCase({
     const deltaSignals = buildDeltaSignals(pendingEdgeFindings)
     const nodeMap = new Map<string, PackageNode>()
     const pendingFindings: PendingScanFinding[] = []
+    const warnings: ScanWarning[] = []
     let overallRiskScore = 0
 
     for (const traversedNode of traversedGraph.nodes) {
@@ -102,6 +104,17 @@ export function createScanPackageUseCase({
       }
 
       const packageNode = toPackageNode(traversedNode, assessment, startedAt)
+      if (traversedNode.metadata_status === 'unresolved_registry_lookup') {
+        warnings.push({
+          kind: 'unresolved_registry_lookup',
+          package_key: traversedNode.key,
+          package_name: traversedNode.package.name,
+          package_version: traversedNode.package.version,
+          message: traversedNode.metadata_warning ?? 'Registry enrichment was unavailable.',
+          lockfile_resolved_url: traversedNode.lockfile_resolved_url,
+          lockfile_integrity: traversedNode.lockfile_integrity,
+        })
+      }
 
       nodeMap.set(traversedNode.key, packageNode)
       overallRiskScore = Math.max(overallRiskScore, assessment.risk_score)
@@ -171,6 +184,7 @@ export function createScanPackageUseCase({
       safe_count: traversedGraph.nodes.length - findings.length,
       overall_risk_score: Number(overallRiskScore.toFixed(2)),
       overall_risk_level: riskLevelForScore(overallRiskScore),
+      warnings,
       scan_duration_ms: Math.max(0, completedAt.getTime() - startedAt.getTime()),
       timestamp: completedAt.toISOString(),
     }
@@ -242,10 +256,19 @@ function assessTraversedNode(
     }
   }
 
+  if (traversedNode.metadata === null) {
+    return {
+      risk_score: 0,
+      risk_level: 'safe',
+      recommendation: 'install',
+      signals: [],
+    }
+  }
+
   return scorer.assessPackage(traversedNode.metadata, {
     depth: traversedNode.depth,
     path: traversedNode.path,
-    dependency_count: Object.keys(traversedNode.metadata.dependencies).length,
+    dependency_count: Object.keys(traversedNode.resolved_dependencies).length,
   })
 }
 
@@ -270,20 +293,37 @@ function toPackageNode(
     key: traversedNode.key,
     depth: traversedNode.depth,
     is_project_root: isProjectRoot,
-    age_days: isProjectRoot ? null : calculateAgeDays(traversedNode.metadata.published_at, startedAt),
-    weekly_downloads: isProjectRoot ? null : traversedNode.metadata.weekly_downloads,
-    dependents_count: isProjectRoot ? null : traversedNode.metadata.dependents_count,
-    deprecated_message: isProjectRoot ? null : traversedNode.metadata.deprecated_message,
-    is_security_tombstone: isProjectRoot ? false : traversedNode.metadata.is_security_tombstone,
-    published_at: isProjectRoot ? null : traversedNode.metadata.published_at,
-    first_published: isProjectRoot ? null : traversedNode.metadata.first_published_at,
-    last_published: isProjectRoot ? null : traversedNode.metadata.last_published_at,
-    total_versions: isProjectRoot ? null : traversedNode.metadata.total_versions,
-    dependency_count: Object.keys(traversedNode.metadata.dependencies).length,
-    publish_events_last_30_days: isProjectRoot
-      ? null
-      : traversedNode.metadata.publish_events_last_30_days,
-    has_advisories: isProjectRoot ? false : traversedNode.metadata.has_advisories,
+    metadata_status: traversedNode.metadata_status,
+    metadata_warning: traversedNode.metadata_warning,
+    lockfile_resolved_url: traversedNode.lockfile_resolved_url,
+    lockfile_integrity: traversedNode.lockfile_integrity,
+    age_days:
+      isProjectRoot || traversedNode.metadata === null
+        ? null
+        : calculateAgeDays(traversedNode.metadata.published_at, startedAt),
+    weekly_downloads:
+      isProjectRoot || traversedNode.metadata === null ? null : traversedNode.metadata.weekly_downloads,
+    dependents_count:
+      isProjectRoot || traversedNode.metadata === null ? null : traversedNode.metadata.dependents_count,
+    deprecated_message:
+      isProjectRoot || traversedNode.metadata === null ? null : traversedNode.metadata.deprecated_message,
+    is_security_tombstone:
+      isProjectRoot || traversedNode.metadata === null ? false : traversedNode.metadata.is_security_tombstone,
+    published_at:
+      isProjectRoot || traversedNode.metadata === null ? null : traversedNode.metadata.published_at,
+    first_published:
+      isProjectRoot || traversedNode.metadata === null ? null : traversedNode.metadata.first_published_at,
+    last_published:
+      isProjectRoot || traversedNode.metadata === null ? null : traversedNode.metadata.last_published_at,
+    total_versions:
+      isProjectRoot || traversedNode.metadata === null ? null : traversedNode.metadata.total_versions,
+    dependency_count: Object.keys(traversedNode.resolved_dependencies).length,
+    publish_events_last_30_days:
+      isProjectRoot || traversedNode.metadata === null
+        ? null
+        : traversedNode.metadata.publish_events_last_30_days,
+    has_advisories:
+      isProjectRoot || traversedNode.metadata === null ? false : traversedNode.metadata.has_advisories,
     risk_score: assessment.risk_score,
     risk_level: assessment.risk_level,
     signals: assessment.signals,
@@ -438,6 +478,7 @@ function buildScanReviewRecord({
     total_scanned: result.total_scanned,
     suspicious_count: result.suspicious_count,
     safe_count: result.safe_count,
+    warnings: result.warnings,
     scan_duration_ms: result.scan_duration_ms,
     dependency_edges: dependencyEdges,
     edge_findings: edgeFindings,

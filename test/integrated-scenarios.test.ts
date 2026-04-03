@@ -316,8 +316,10 @@ function createGraph(children: string[]): TraversedDependencyGraph {
   return {
     root_key: 'root@1.0.0',
     nodes: [
-      createTraversedNode('root@1.0.0', 0, null, ['root@1.0.0']),
-      ...children.map((child) => createTraversedNode(child, 1, 'root@1.0.0', ['root@1.0.0', child])),
+      createTraversedNode('root@1.0.0', 0, null, ['root@1.0.0'], children),
+      ...children.map((child) =>
+        createTraversedNode(child, 1, 'root@1.0.0', ['root@1.0.0', child], []),
+      ),
     ],
   }
 }
@@ -327,18 +329,31 @@ function createTraversedNode(
   depth: number,
   parentKey: string | null,
   path: string[],
+  dependencyKeys: string[],
 ) {
-  const [name, version] = key.split('@')
+  const { name, version } = splitPackageKey(key)
+  const resolvedDependencies = Object.fromEntries(
+    dependencyKeys.map((dependencyKey) => {
+      const split = splitPackageKey(dependencyKey)
+
+      return [split.name, split.version]
+    }),
+  )
 
   return {
     key,
     package: { name, version },
-    metadata: createMetadata(name, version),
+    metadata: createMetadata(name, version, resolvedDependencies),
+    resolved_dependencies: resolvedDependencies,
+    metadata_status: 'enriched' as const,
+    metadata_warning: null,
+    lockfile_resolved_url: null,
+    lockfile_integrity: null,
     depth,
     parent_key: parentKey,
     path: {
       packages: path.map((packageKey) => {
-        const [pathName, pathVersion] = packageKey.split('@')
+        const { name: pathName, version: pathVersion } = splitPackageKey(packageKey)
 
         return { name: pathName, version: pathVersion }
       }),
@@ -346,10 +361,14 @@ function createTraversedNode(
   }
 }
 
-function createMetadata(name: string, version: string): PackageMetadata {
+function createMetadata(
+  name: string,
+  version: string,
+  dependencies: Record<string, string> = {},
+): PackageMetadata {
   return {
     package: { name, version },
-    dependencies: {},
+    dependencies,
     published_at: '2026-03-01T00:00:00.000Z',
     first_published_at: '2026-01-01T00:00:00.000Z',
     last_published_at: '2026-03-01T00:00:00.000Z',
@@ -360,5 +379,14 @@ function createMetadata(name: string, version: string): PackageMetadata {
     is_security_tombstone: false,
     has_advisories: false,
     dependents_count: null,
+  }
+}
+
+function splitPackageKey(key: string): { name: string; version: string } {
+  const separator = key.lastIndexOf('@')
+
+  return {
+    name: key.slice(0, separator),
+    version: key.slice(separator + 1),
   }
 }
