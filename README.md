@@ -4,13 +4,15 @@
 
 <p align="center">
   <a href="https://www.npmjs.com/package/@synsoftworks/depgraph-cli"><img alt="npm version" src="https://img.shields.io/npm/v/%40synsoftworks%2Fdepgraph-cli?style=flat-square"></a>
+  <a href="https://www.npmjs.com/package/@synsoftworks/depgraph-cli"><img alt="npm downloads per month" src="https://img.shields.io/npm/dm/%40synsoftworks%2Fdepgraph-cli?style=flat-square"></a>
+  <a href="https://nodejs.org/"><img alt="node version" src="https://img.shields.io/node/v/%40synsoftworks%2Fdepgraph-cli?style=flat-square"></a>
   <a href="https://github.com/synsoftworks/depgraph-cli/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/synsoftworks/depgraph-cli/actions/workflows/ci.yml/badge.svg"></a>
   <a href="https://github.com/synsoftworks/depgraph-cli/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/github/license/synsoftworks/depgraph-cli?style=flat-square"></a>
 </p>
 
-DepGraph is a supply chain security tool that lives in your terminal, sniffs your npm dependency tree for attack signals, and tells you exactly why a package looks suspicious — before you ship it.
+DepGraph is a supply chain security tool that lives in your terminal, sniffs your npm dependency tree for attack signals, and tells you exactly why a package looks suspicious before you ship it.
 
-Run it before every install. Use the JSON output in CI. Let Node do the sniffing.
+Run it before every install. Use the JSON output in CI. Agent friendly 🤖
 
 ## Get Started
 
