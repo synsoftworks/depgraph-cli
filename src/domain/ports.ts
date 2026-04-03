@@ -2,6 +2,7 @@ import type {
   BaselineIdentity,
   DependencyPath,
   PackageMetadata,
+  PackageMetadataStatus,
   PackageSpec,
   RiskAssessment,
   ResolvedReviewTargetState,
@@ -12,7 +13,12 @@ import type {
 export interface TraversedPackageNode {
   key: string
   package: PackageMetadata['package']
-  metadata: PackageMetadata
+  metadata: PackageMetadata | null
+  resolved_dependencies?: Record<string, string>
+  metadata_status?: PackageMetadataStatus
+  metadata_warning?: string | null
+  lockfile_resolved_url?: string | null
+  lockfile_integrity?: string | null
   depth: number
   parent_key: string | null
   path: DependencyPath

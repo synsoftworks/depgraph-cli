@@ -17,10 +17,21 @@ import type {
   RiskScorer,
   ScanReviewStore,
   TraversedDependencyGraph,
+  TraversedPackageNode,
 } from '../src/domain/ports.js'
 
+type TestTraversedPackageNode = TraversedPackageNode
+type TestTraversedDependencyGraph = {
+  root_key: string
+  nodes: TestTraversedPackageNode[]
+}
+
 class StubRegistryTraverser implements RegistryDependencyTraverser {
-  constructor(private readonly graph: TraversedDependencyGraph) {}
+  private readonly graph: TraversedDependencyGraph
+
+  constructor(graph: TestTraversedDependencyGraph) {
+    this.graph = normalizeGraph(graph)
+  }
 
   async traverse(): Promise<TraversedDependencyGraph> {
     return this.graph
@@ -28,7 +39,11 @@ class StubRegistryTraverser implements RegistryDependencyTraverser {
 }
 
 class StubPackageLockTraverser implements PackageLockDependencyTraverser {
-  constructor(private readonly graph: TraversedDependencyGraph) {}
+  private readonly graph: TraversedDependencyGraph
+
+  constructor(graph: TestTraversedDependencyGraph) {
+    this.graph = normalizeGraph(graph)
+  }
 
   async traverse(): Promise<TraversedDependencyGraph> {
     return this.graph
@@ -127,6 +142,26 @@ function createMetadata(name: string, version: string): PackageMetadata {
     is_security_tombstone: false,
     has_advisories: false,
     dependents_count: null,
+  }
+}
+
+function normalizeGraph(graph: TestTraversedDependencyGraph): TraversedDependencyGraph {
+  return {
+    root_key: graph.root_key,
+    nodes: graph.nodes.map((node) => ({
+      ...node,
+      resolved_dependencies: node.resolved_dependencies ?? node.metadata?.dependencies ?? {},
+      metadata_status:
+        node.metadata_status ??
+        (node.is_virtual_root === true
+          ? 'synthetic_project_root'
+          : node.metadata === null
+            ? 'unresolved_registry_lookup'
+            : 'enriched'),
+      metadata_warning: node.metadata_warning ?? null,
+      lockfile_resolved_url: node.lockfile_resolved_url ?? null,
+      lockfile_integrity: node.lockfile_integrity ?? null,
+    })),
   }
 }
 
@@ -482,6 +517,10 @@ test('scan use case persists a durable scan review record after the scan complet
       key: 'root@1.0.0',
       depth: 0,
       is_project_root: false,
+      metadata_status: 'enriched',
+      metadata_warning: null,
+      lockfile_resolved_url: null,
+      lockfile_integrity: null,
       age_days: 31,
       weekly_downloads: 1000,
       dependents_count: null,
@@ -505,6 +544,10 @@ test('scan use case persists a durable scan review record after the scan complet
           key: 'child@1.0.0',
           depth: 1,
           is_project_root: false,
+          metadata_status: 'enriched',
+          metadata_warning: null,
+          lockfile_resolved_url: null,
+          lockfile_integrity: null,
           age_days: 31,
           weekly_downloads: 1000,
           dependents_count: null,
@@ -535,6 +578,7 @@ test('scan use case persists a durable scan review record after the scan complet
     total_scanned: 2,
     suspicious_count: 1,
     safe_count: 1,
+    warnings: [],
     scan_duration_ms: 0,
     dependency_edges: [
       {
@@ -892,6 +936,7 @@ test('package_lock scans keep synthetic project-root metadata explicit and persi
   })
 
   assert.equal(result.root.is_project_root, true)
+  assert.equal(result.root.metadata_status, 'synthetic_project_root')
   assert.equal(result.root.age_days, null)
   assert.equal(result.root.published_at, null)
   assert.equal(result.root.first_published, null)
@@ -908,6 +953,68 @@ test('package_lock scans keep synthetic project-root metadata explicit and persi
   assert.equal(result.root.dependencies[0]?.last_published, '2026-03-20T00:00:00.000Z')
   assert.equal(result.root.dependencies[0]?.total_versions, 9)
   assert.equal(result.root.dependencies[0]?.publish_events_last_30_days, 2)
+})
+
+test('package_lock scans add a low-weight unresolved_registry_lookup signal without creating a finding by itself', async () => {
+  const reviewStore = new InMemoryReviewStore()
+  const scanPackage = createScanPackageUseCase({
+    registryTraverser: new StubRegistryTraverser(createLinearGraph()),
+    packageLockTraverser: new StubPackageLockTraverser({
+      root_key: 'project@1.0.0',
+      nodes: [
+        {
+          key: 'project@1.0.0',
+          package: { name: 'project', version: '1.0.0' },
+          metadata: createMetadata('project', '1.0.0'),
+          depth: 0,
+          parent_key: null,
+          path: {
+            packages: [{ name: 'project', version: '1.0.0' }],
+          },
+          is_virtual_root: true,
+        },
+        {
+          key: '@gsap/simply@1.2.3',
+          package: { name: '@gsap/simply', version: '1.2.3' },
+          metadata: null,
+          depth: 1,
+          parent_key: 'project@1.0.0',
+          path: {
+            packages: [
+              { name: 'project', version: '1.0.0' },
+              { name: '@gsap/simply', version: '1.2.3' },
+            ],
+          },
+          metadata_warning: 'Package "@gsap/simply" was not found in the npm registry.',
+          lockfile_resolved_url: 'https://vendor.example/@gsap/simply/-/simply-1.2.3.tgz',
+          lockfile_integrity: 'sha512-example',
+        },
+      ],
+    }),
+    scorer: new StubScorer({}),
+    reviewStore,
+    now: () => new Date('2026-04-01T00:00:00.000Z'),
+  })
+
+  const result = await scanPackage({
+    scan_mode: 'package_lock',
+    package_lock_path: '/tmp/project/package-lock.json',
+    project_root: '/tmp/project',
+    max_depth: 3,
+    threshold: 0.4,
+    verbose: false,
+    workspace_identity: 'local',
+  })
+
+  assert.equal(result.findings.length, 0)
+  assert.equal(result.overall_risk_score, 0.08)
+  assert.equal(result.overall_risk_level, 'safe')
+  assert.equal(result.warnings.length, 1)
+  assert.equal(result.root.dependencies[0]?.metadata_status, 'unresolved_registry_lookup')
+  assert.equal(result.root.dependencies[0]?.risk_score, 0.08)
+  assert.equal(result.root.dependencies[0]?.risk_level, 'safe')
+  assert.equal(result.root.dependencies[0]?.signals[0]?.type, 'unresolved_registry_lookup')
+  assert.equal(result.root.dependencies[0]?.signals[0]?.weight, 'low')
 })
 
 function createLinearGraph(): TraversedDependencyGraph {
@@ -980,6 +1087,7 @@ function createStoredRecord({
     scan_duration_ms: 0,
     dependency_edges: dependencyEdges,
     edge_findings: [],
+    warnings: [],
   }
 }
 
@@ -1032,6 +1140,10 @@ function createStoredPackageNode(): PackageNode {
     key: 'root@1.0.0',
     depth: 0,
     is_project_root: false,
+    metadata_status: 'enriched',
+    metadata_warning: null,
+    lockfile_resolved_url: null,
+    lockfile_integrity: null,
     age_days: 31,
     weekly_downloads: 1000,
     dependents_count: null,

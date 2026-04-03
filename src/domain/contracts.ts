@@ -23,6 +23,11 @@ export interface DependencyPath {
   packages: ResolvedPackage[]
 }
 
+export type PackageMetadataStatus =
+  | 'enriched'
+  | 'unresolved_registry_lookup'
+  | 'synthetic_project_root'
+
 // Scan mode records which structural source produced the scan.
 // Baseline matching and downstream analysis must keep these source types separate.
 export type ScanMode = 'registry_package' | 'package_lock'
@@ -101,6 +106,16 @@ export interface EdgeFinding {
   recommendation: Recommendation | null
 }
 
+export interface ScanWarning {
+  kind: 'unresolved_registry_lookup'
+  package_key: string
+  package_name: string
+  package_version: string
+  message: string
+  lockfile_resolved_url: string | null
+  lockfile_integrity: string | null
+}
+
 export interface ScanReviewRecord {
   record_id: string
   created_at: string
@@ -125,6 +140,7 @@ export interface ScanReviewRecord {
   // Projected edges captured from the current v1 traversal model.
   dependency_edges: DependencyGraphEdge[]
   edge_findings: EdgeFinding[]
+  warnings: ScanWarning[]
 }
 
 export interface ReviewScanRequest {

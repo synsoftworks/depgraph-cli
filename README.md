@@ -137,20 +137,6 @@ This mode is intended for automation, CI checks, and agent tooling that needs ma
 
 `package_lock` scanning currently supports `package-lock.json` with `lockfileVersion >= 2` and a `packages` map only.
 
-## How Risk Scoring Works
-
-DepGraph uses explainable metadata-based signals instead of opaque output. Current signals include:
-
-- very new package age
-- low version history
-- low or zero weekly downloads when available
-- unusual publish churn
-- large dependency surface
-- npm security tombstones and deprecations
-- newly introduced direct and transitive dependency edges relative to the latest local baseline scan
-
-Human review is captured separately from heuristic scoring so the stored dataset can become durable ground truth over time.
-
 ## Local Data Model
 
 DepGraph now persists repo-local history under `.depgraph/`:
@@ -158,22 +144,40 @@ DepGraph now persists repo-local history under `.depgraph/`:
 - `scans.jsonl` for immutable scan records
 - `review-events.jsonl` for append-only review annotations
 
-This keeps the local dataset inspectable, scriptable, and cheap to evolve without introducing a database yet.
+## Status
+
+DepGraph is pre-v1 and under active development. Core scanning works.
+Some dependency types degrade gracefully rather than fully enriching.
+See the roadmap for what's coming.
 
 ## Roadmap
 
-- [x] npm package scanning MVP
-- [x] rich Ink terminal UI
+### Shipped
+
+- [x] npm package scanning with BFS traversal
+- [x] rich Ink terminal UI and plain text mode
 - [x] deterministic JSON output for agents and CI
-- [x] traversal with shortest suspicious paths
-- [x] local scan persistence and append-only review capture
-- [x] projected dependency edge delta against prior local baseline
-- [x] basic local dataset evaluation
+- [x] local scan persistence and append-only review history
+- [x] projected dependency edge delta against prior baseline
 - [x] package-lock.json project scanning
-- [ ] advisory integration
-- [ ] stronger composite signals
+- [x] graceful degradation for private and non-registry dependencies
+- [x] finding-level review targets and source-precedence label integrity
+- [x] local dataset evaluation
+
+### Coming Soon
+
+- [ ] pnpm and yarn lockfile support
+- [ ] advisory database integration
 - [ ] sensitive import analysis
 - [ ] explain command
+- [ ] CI/CD GitHub Action
+- [ ] depgraph.sh
+
+### Future
+
+- [ ] pip / cargo / gem ecosystem support
+- [ ] maintainer history signals
+- [ ] organization-level scan aggregation
 
 ## Philosophy
 
