@@ -340,6 +340,7 @@ async function resolveExactPackageMetadata(
     version_range: packageVersion,
   })
   metadataCache.set(key, metadataPromise)
+  const metadata = await metadataPromise
 
   const metadata = await metadataPromise
 

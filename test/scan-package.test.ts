@@ -128,6 +128,26 @@ class InMemoryReviewStore implements ScanReviewStore {
   }
 }
 
+function normalizeGraph(graph: TestTraversedDependencyGraph): TraversedDependencyGraph {
+  return {
+    root_key: graph.root_key,
+    nodes: graph.nodes.map((node) => ({
+      ...node,
+      resolved_dependencies: node.resolved_dependencies ?? node.metadata?.dependencies ?? {},
+      metadata_status:
+        node.metadata_status ??
+        (node.is_virtual_root === true
+          ? 'synthetic_project_root'
+          : node.metadata === null
+            ? 'unresolved_registry_lookup'
+            : 'enriched'),
+      metadata_warning: node.metadata_warning ?? null,
+      lockfile_resolved_url: node.lockfile_resolved_url ?? null,
+      lockfile_integrity: node.lockfile_integrity ?? null,
+    })),
+  }
+}
+
 function createMetadata(name: string, version: string): PackageMetadata {
   return {
     package: { name, version },
