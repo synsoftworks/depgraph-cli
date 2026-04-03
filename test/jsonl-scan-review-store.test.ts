@@ -76,6 +76,31 @@ test('JSONL scan review store appends review events without rewriting scan recor
   assert.equal(reviewContents.trim().split('\n').length, 1)
   assert.equal(reviewEvents[0]?.record_id, 'scan-1')
   assert.equal(reviewEvents[0]?.outcome, 'benign')
+  assert.equal(reviewEvents[0]?.review_target.target_id, 'package_finding:root@1.0.0')
+})
+
+test('JSONL scan review store upgrades legacy review events into explicit package-finding targets', async () => {
+  const workingDirectory = await mkdtemp(join(tmpdir(), 'depgraph-jsonl-'))
+  const paths = defaultScanReviewStorePaths(workingDirectory)
+  const store = new JsonlScanReviewStore(paths)
+
+  await store.appendScanRecord(
+    createRecord({
+      recordId: 'scan-1',
+      createdAt: '2026-04-01T00:00:00.000Z',
+      scanTarget: 'root',
+      packageKey: 'root@1.0.0',
+      workspaceIdentity: workingDirectory,
+      dependencyEdges: [],
+    }),
+  )
+  await readFile(paths.scanRecordsPath, 'utf8')
+  await writeLegacyReviewEvent(paths.reviewEventsPath)
+
+  const reviewEvents = await store.listReviewEvents()
+
+  assert.equal(reviewEvents[0]?.review_target.kind, 'package_finding')
+  assert.equal(reviewEvents[0]?.review_target.target_id, 'package_finding:root@1.0.0')
 })
 
 function createRecord({
@@ -146,9 +171,15 @@ function createRecord({
 
 function createReviewEvent(recordId: string): ReviewEvent {
   return {
-    event_id: `2026-04-03T00:00:00.000Z:${recordId}:benign`,
+    event_id: `2026-04-03T00:00:00.000Z:package_finding:root@1.0.0:benign`,
     record_id: recordId,
-    package_key: 'root@1.0.0',
+    review_target: {
+      kind: 'package_finding',
+      record_id: recordId,
+      target_id: 'package_finding:root@1.0.0',
+      finding_key: 'package_finding:root@1.0.0',
+      package_key: 'root@1.0.0',
+    },
     created_at: '2026-04-03T00:00:00.000Z',
     outcome: 'benign',
     notes: 'verified expansion',
@@ -156,4 +187,24 @@ function createReviewEvent(recordId: string): ReviewEvent {
     review_source: 'human',
     confidence: 0.95,
   }
+}
+
+async function writeLegacyReviewEvent(path: string): Promise<void> {
+  const { appendFile } = await import('node:fs/promises')
+
+  await appendFile(
+    path,
+    `${JSON.stringify({
+      event_id: '2026-04-03T00:00:00.000Z:legacy:benign',
+      record_id: 'scan-1',
+      package_key: 'root@1.0.0',
+      created_at: '2026-04-03T00:00:00.000Z',
+      outcome: 'benign',
+      notes: 'legacy',
+      resolution_timestamp: '2026-04-03T00:00:00.000Z',
+      review_source: 'human',
+      confidence: 0.95,
+    })}\n`,
+    'utf8',
+  )
 }

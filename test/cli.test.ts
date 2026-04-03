@@ -54,6 +54,13 @@ function createResult(suspiciousCount = 0): ScanResult {
               name: 'root',
               version: '1.0.0',
               depth: 0,
+              review_target: {
+                kind: 'package_finding',
+                record_id: '2026-04-01T00:00:00.000Z:root@1.0.0:depth=3',
+                target_id: 'package_finding:root@1.0.0',
+                finding_key: 'package_finding:root@1.0.0',
+                package_key: 'root@1.0.0',
+              },
               path: {
                 packages: [{ name: 'root', version: '1.0.0' }],
               },
@@ -77,9 +84,15 @@ function createResult(suspiciousCount = 0): ScanResult {
 
 function createReviewEvent(): ReviewEvent {
   return {
-    event_id: '2026-04-02T00:00:00.000Z:2026-04-01T00:00:00.000Z:root@1.0.0:depth=3:benign',
+    event_id: '2026-04-02T00:00:00.000Z:package_finding:root@1.0.0:benign',
     record_id: '2026-04-01T00:00:00.000Z:root@1.0.0:depth=3',
-    package_key: 'root@1.0.0',
+    review_target: {
+      kind: 'package_finding',
+      record_id: '2026-04-01T00:00:00.000Z:root@1.0.0:depth=3',
+      target_id: 'package_finding:root@1.0.0',
+      finding_key: 'package_finding:root@1.0.0',
+      package_key: 'root@1.0.0',
+    },
     created_at: '2026-04-02T00:00:00.000Z',
     outcome: 'benign',
     notes: 'reviewed',
@@ -92,6 +105,11 @@ function createReviewEvent(): ReviewEvent {
 function createEvaluationSummary(): EvaluationSummary {
   return {
     total_scans: 3,
+    review_targets: {
+      total_targets: 3,
+      package_finding_targets: 2,
+      edge_finding_targets: 1,
+    },
     raw_review_events: {
       total_events: 3,
       malicious_events: 1,
@@ -99,16 +117,16 @@ function createEvaluationSummary(): EvaluationSummary {
       needs_review_events: 1,
     },
     canonical_labels: {
-      total_labeled_records: 2,
-      malicious_records: 1,
-      benign_records: 1,
-      unlabeled_records: 1,
+      total_labeled_targets: 2,
+      malicious_targets: 1,
+      benign_targets: 1,
+      unlabeled_targets: 1,
       derived_from: 'latest_label_bearing_event',
     },
     workflow_status: {
-      unreviewed_records: 1,
-      needs_review_records: 1,
-      resolved_records: 1,
+      unreviewed_targets: 1,
+      needs_review_targets: 1,
+      resolved_targets: 1,
     },
     signal_frequency: [
       { type: 'test_signal', count: 2 },
@@ -225,17 +243,18 @@ test('CLI maps network failures to exit code 3', async () => {
   assert.match(stderr.buffer, /registry down/)
 })
 
-test('CLI review command updates stored scan records deterministically', async () => {
+test('CLI review command forwards explicit target ids deterministically', async () => {
   const stdout = new MemoryStream()
   const stderr = new MemoryStream()
   let reviewCalls = 0
 
-  const exitCode = await run(['review', 'scan-record-id', '--outcome', 'benign', '--notes', 'checked', '--confidence', '0.8'], {
+  const exitCode = await run(['review', 'scan-record-id', '--target', 'package_finding:root@1.0.0', '--outcome', 'benign', '--notes', 'checked', '--confidence', '0.8'], {
     scanPackage: async () => createResult(),
     reviewScan: async (request) => {
       reviewCalls += 1
       assert.deepEqual(request, {
         record_id: 'scan-record-id',
+        target_id: 'package_finding:root@1.0.0',
         outcome: 'benign',
         notes: 'checked',
         review_source: 'human',

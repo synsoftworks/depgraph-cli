@@ -57,16 +57,19 @@ test('evaluate scans reports metadata coverage and latest-label counts', async (
   const summary = await evaluateScans()
 
   assert.equal(summary.total_scans, 1)
+  assert.equal(summary.review_targets.total_targets, 1)
+  assert.equal(summary.review_targets.package_finding_targets, 1)
+  assert.equal(summary.review_targets.edge_finding_targets, 0)
   assert.equal(summary.raw_review_events.total_events, 3)
   assert.equal(summary.raw_review_events.benign_events, 1)
   assert.equal(summary.raw_review_events.needs_review_events, 2)
-  assert.equal(summary.canonical_labels.total_labeled_records, 1)
-  assert.equal(summary.canonical_labels.benign_records, 1)
-  assert.equal(summary.canonical_labels.malicious_records, 0)
-  assert.equal(summary.canonical_labels.unlabeled_records, 0)
-  assert.equal(summary.workflow_status.needs_review_records, 1)
-  assert.equal(summary.workflow_status.resolved_records, 0)
-  assert.equal(summary.workflow_status.unreviewed_records, 0)
+  assert.equal(summary.canonical_labels.total_labeled_targets, 1)
+  assert.equal(summary.canonical_labels.benign_targets, 1)
+  assert.equal(summary.canonical_labels.malicious_targets, 0)
+  assert.equal(summary.canonical_labels.unlabeled_targets, 0)
+  assert.equal(summary.workflow_status.needs_review_targets, 1)
+  assert.equal(summary.workflow_status.resolved_targets, 0)
+  assert.equal(summary.workflow_status.unreviewed_targets, 0)
   assert.equal(summary.metadata_coverage.weekly_downloads.missing_count, 1)
   assert.equal(summary.metadata_coverage.weekly_downloads.total_nodes, 2)
   assert.equal(summary.metadata_coverage.weekly_downloads.missing_percent, 50)
@@ -105,7 +108,36 @@ function createRecord(): ScanReviewRecord {
         reason: 'root signal',
       },
     ],
-    findings: [],
+    findings: [
+      {
+        key: 'root@1.0.0',
+        name: 'root',
+        version: '1.0.0',
+        depth: 0,
+        review_target: {
+          kind: 'package_finding',
+          record_id: 'record-1',
+          target_id: 'package_finding:root@1.0.0',
+          finding_key: 'package_finding:root@1.0.0',
+          package_key: 'root@1.0.0',
+        },
+        path: {
+          packages: [{ name: 'root', version: '1.0.0' }],
+        },
+        risk_score: 0.48,
+        risk_level: 'review',
+        recommendation: 'review',
+        signals: [
+          {
+            type: 'root_signal',
+            value: 1,
+            weight: 'medium',
+            reason: 'root signal',
+          },
+        ],
+        explanation: 'root signal',
+      },
+    ],
     root: {
       name: 'root',
       version: '1.0.0',
@@ -178,9 +210,15 @@ function createRecord(): ScanReviewRecord {
 
 function createReviewEvent(outcome: ReviewEvent['outcome'], createdAt: string): ReviewEvent {
   return {
-    event_id: `${createdAt}:record-1:${outcome}`,
+    event_id: `${createdAt}:package_finding:root@1.0.0:${outcome}`,
     record_id: 'record-1',
-    package_key: 'root@1.0.0',
+    review_target: {
+      kind: 'package_finding',
+      record_id: 'record-1',
+      target_id: 'package_finding:root@1.0.0',
+      finding_key: 'package_finding:root@1.0.0',
+      package_key: 'root@1.0.0',
+    },
     created_at: createdAt,
     outcome,
     notes: null,

@@ -14,6 +14,7 @@ import { createReviewScanUseCase } from '../src/application/review-scan.js'
 import { createScanPackageUseCase } from '../src/application/scan-package.js'
 import type { PackageMetadata } from '../src/domain/contracts.js'
 import type { DependencyTraverser, RiskScorer, TraversedDependencyGraph } from '../src/domain/ports.js'
+import { reviewTargetScopeKey } from '../src/domain/review-targets.js'
 
 class MutableTraverser implements DependencyTraverser {
   constructor(private graph: TraversedDependencyGraph) {}
@@ -149,6 +150,15 @@ test('Scenario B: a suspicious new direct dependency is captured as both an edge
     path: ['root@1.0.0', 'new-child@1.0.0'],
     depth: 1,
     edge_type: 'direct',
+    review_target: {
+      kind: 'edge_finding',
+      record_id: changedResult.record_id,
+      target_id: 'edge_finding:direct:root@1.0.0->new-child@1.0.0',
+      edge_finding_key: 'edge_finding:direct:root@1.0.0->new-child@1.0.0',
+      parent_key: 'root@1.0.0',
+      child_key: 'new-child@1.0.0',
+      edge_type: 'direct',
+    },
     baseline_record_id: baselineResult.record_id,
     baseline_identity: {
       scan_target: 'root',
@@ -175,7 +185,7 @@ test('Scenario C: review progression preserves append-only history and canonical
   const traverser = new MutableTraverser(createGraph(['child@1.0.0']))
   const scorer = new StubScorer({
     'root@1.0.0': 0.1,
-    'child@1.0.0': 0,
+    'child@1.0.0': 0.8,
   })
   const scanPackage = createScanPackageUseCase({
     traverser,
@@ -211,6 +221,9 @@ test('Scenario C: review progression preserves append-only history and canonical
     verbose: false,
     workspace_identity: workingDirectory,
   })
+  const reviewTarget = scanResult.findings[0]?.review_target
+
+  assert.ok(reviewTarget)
 
   await reviewBenign({
     record_id: scanResult.record_id,
@@ -220,8 +233,8 @@ test('Scenario C: review progression preserves append-only history and canonical
     confidence: 0.9,
   })
   let resolvedReviewStateIndex = await resolveReviewStateIndex()
-  assert.equal(resolvedReviewStateIndex.get(scanResult.record_id)?.canonical_label, 'benign')
-  assert.equal(resolvedReviewStateIndex.get(scanResult.record_id)?.workflow_status, 'resolved')
+  assert.equal(resolvedReviewStateIndex.get(reviewTargetScopeKey(reviewTarget!))?.canonical_label, 'benign')
+  assert.equal(resolvedReviewStateIndex.get(reviewTargetScopeKey(reviewTarget!))?.workflow_status, 'resolved')
 
   await reviewNeedsReview({
     record_id: scanResult.record_id,
@@ -231,8 +244,8 @@ test('Scenario C: review progression preserves append-only history and canonical
     confidence: 0.8,
   })
   resolvedReviewStateIndex = await resolveReviewStateIndex()
-  assert.equal(resolvedReviewStateIndex.get(scanResult.record_id)?.canonical_label, 'benign')
-  assert.equal(resolvedReviewStateIndex.get(scanResult.record_id)?.workflow_status, 'needs_review')
+  assert.equal(resolvedReviewStateIndex.get(reviewTargetScopeKey(reviewTarget!))?.canonical_label, 'benign')
+  assert.equal(resolvedReviewStateIndex.get(reviewTargetScopeKey(reviewTarget!))?.workflow_status, 'needs_review')
 
   await reviewMalicious({
     record_id: scanResult.record_id,
@@ -259,11 +272,12 @@ test('Scenario C: review progression preserves append-only history and canonical
   assert.equal(summary.raw_review_events.benign_events, 1)
   assert.equal(summary.raw_review_events.needs_review_events, 1)
   assert.equal(summary.raw_review_events.malicious_events, 1)
-  assert.equal(summary.canonical_labels.total_labeled_records, 1)
-  assert.equal(summary.canonical_labels.malicious_records, 1)
-  assert.equal(summary.canonical_labels.benign_records, 0)
-  assert.equal(summary.workflow_status.resolved_records, 1)
-  assert.equal(summary.workflow_status.needs_review_records, 0)
+  assert.equal(summary.review_targets.total_targets, 1)
+  assert.equal(summary.canonical_labels.total_labeled_targets, 1)
+  assert.equal(summary.canonical_labels.malicious_targets, 1)
+  assert.equal(summary.canonical_labels.benign_targets, 0)
+  assert.equal(summary.workflow_status.resolved_targets, 1)
+  assert.equal(summary.workflow_status.needs_review_targets, 0)
 })
 
 function createGraph(children: string[]): TraversedDependencyGraph {

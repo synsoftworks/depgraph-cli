@@ -2,7 +2,8 @@ import type {
   CoverageSignalFrequency,
   EvaluationSummary,
   MetadataCoverageSummary,
-  ResolvedReviewState,
+  ResolvedReviewTargetState,
+  ReviewTarget,
   SignalFrequency,
 } from '../domain/contracts.js'
 import type { PackageNode, RiskSignal } from '../domain/entities.js'
@@ -12,7 +13,7 @@ import { getResolvedReviewState } from './resolve-review-state.js'
 interface EvaluateScansDependencies {
   scanRecordSource: Pick<ScanReviewStore, 'listScanRecords'>
   rawReviewEventSource: Pick<ScanReviewStore, 'listReviewEvents'>
-  resolveReviewStateIndex: () => Promise<ReadonlyMap<string, ResolvedReviewState>>
+  resolveReviewStateIndex: () => Promise<ReadonlyMap<string, ResolvedReviewTargetState>>
 }
 
 export function createEvaluateScansUseCase({
@@ -35,11 +36,14 @@ export function createEvaluateScansUseCase({
     let totalNodes = 0
     let nodesMissingWeeklyDownloads = 0
     let nodesMissingDependentsCount = 0
-    let unreviewedRecords = 0
-    let needsReviewRecords = 0
-    let resolvedRecords = 0
-    let canonicalMaliciousRecords = 0
-    let canonicalBenignRecords = 0
+    let totalTargets = 0
+    let packageFindingTargets = 0
+    let edgeFindingTargets = 0
+    let unreviewedTargets = 0
+    let needsReviewTargets = 0
+    let resolvedTargets = 0
+    let canonicalMaliciousTargets = 0
+    let canonicalBenignTargets = 0
     let maliciousEvents = 0
     let benignEvents = 0
     let needsReviewEvents = 0
@@ -83,32 +87,47 @@ export function createEvaluateScansUseCase({
         collectSignals(node.signals, signalCounts)
       }
 
-      const resolvedReviewState = getResolvedReviewState(record.record_id, resolvedReviewStateIndex)
+      for (const reviewTarget of listReviewTargets(record)) {
+        totalTargets += 1
 
-      switch (resolvedReviewState.workflow_status) {
-        case 'unreviewed':
-          unreviewedRecords += 1
-          break
-        case 'needs_review':
-          needsReviewRecords += 1
-          break
-        case 'resolved':
-          resolvedRecords += 1
-          break
-      }
+        if (reviewTarget.kind === 'package_finding') {
+          packageFindingTargets += 1
+        } else {
+          edgeFindingTargets += 1
+        }
 
-      switch (resolvedReviewState.canonical_label) {
-        case 'malicious':
-          canonicalMaliciousRecords += 1
-          break
-        case 'benign':
-          canonicalBenignRecords += 1
-          break
+        const resolvedReviewState = getResolvedReviewState(reviewTarget, resolvedReviewStateIndex)
+
+        switch (resolvedReviewState.workflow_status) {
+          case 'unreviewed':
+            unreviewedTargets += 1
+            break
+          case 'needs_review':
+            needsReviewTargets += 1
+            break
+          case 'resolved':
+            resolvedTargets += 1
+            break
+        }
+
+        switch (resolvedReviewState.canonical_label) {
+          case 'malicious':
+            canonicalMaliciousTargets += 1
+            break
+          case 'benign':
+            canonicalBenignTargets += 1
+            break
+        }
       }
     }
 
     return {
       total_scans: scanRecords.length,
+      review_targets: {
+        total_targets: totalTargets,
+        package_finding_targets: packageFindingTargets,
+        edge_finding_targets: edgeFindingTargets,
+      },
       raw_review_events: {
         total_events: rawReviewEvents.length,
         malicious_events: maliciousEvents,
@@ -116,16 +135,16 @@ export function createEvaluateScansUseCase({
         needs_review_events: needsReviewEvents,
       },
       canonical_labels: {
-        total_labeled_records: canonicalMaliciousRecords + canonicalBenignRecords,
-        malicious_records: canonicalMaliciousRecords,
-        benign_records: canonicalBenignRecords,
-        unlabeled_records: scanRecords.length - (canonicalMaliciousRecords + canonicalBenignRecords),
+        total_labeled_targets: canonicalMaliciousTargets + canonicalBenignTargets,
+        malicious_targets: canonicalMaliciousTargets,
+        benign_targets: canonicalBenignTargets,
+        unlabeled_targets: totalTargets - (canonicalMaliciousTargets + canonicalBenignTargets),
         derived_from: 'latest_label_bearing_event',
       },
       workflow_status: {
-        unreviewed_records: unreviewedRecords,
-        needs_review_records: needsReviewRecords,
-        resolved_records: resolvedRecords,
+        unreviewed_targets: unreviewedTargets,
+        needs_review_targets: needsReviewTargets,
+        resolved_targets: resolvedTargets,
       },
       signal_frequency: toSortedSignalFrequency(signalCounts),
       metadata_coverage: buildMetadataCoverageSummary({
@@ -139,6 +158,13 @@ export function createEvaluateScansUseCase({
       }),
     }
   }
+}
+
+function listReviewTargets(record: Awaited<ReturnType<ScanReviewStore['listScanRecords']>>[number]): ReviewTarget[] {
+  return [
+    ...record.findings.map((finding) => finding.review_target),
+    ...record.edge_findings.map((edgeFinding) => edgeFinding.review_target),
+  ]
 }
 
 function flattenNodes(root: PackageNode): PackageNode[] {

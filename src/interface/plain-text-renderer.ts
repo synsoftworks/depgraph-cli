@@ -18,6 +18,7 @@ export function renderPlainText(result: ScanResult): string {
       lines.push(
         `- ${edgeFinding.parent_key} -> ${edgeFinding.child_key} [${edgeFinding.edge_type}] via ${edgeFinding.path.join(' > ')}`,
       )
+      lines.push(`  target: ${edgeFinding.review_target.target_id}`)
       lines.push(`  explanation: ${edgeFinding.reason}`)
     }
   }
@@ -34,6 +35,7 @@ export function renderPlainText(result: ScanResult): string {
       lines.push(
         `- ${finding.key} [${finding.risk_level} ${finding.risk_score.toFixed(2)}] via ${formatPath(finding.path.packages)}`,
       )
+      lines.push(`  target: ${finding.review_target.target_id}`)
       lines.push(`  explanation: ${finding.explanation}`)
     }
   }

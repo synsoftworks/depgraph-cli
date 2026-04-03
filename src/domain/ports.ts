@@ -4,6 +4,7 @@ import type {
   PackageMetadata,
   PackageSpec,
   RiskAssessment,
+  ResolvedReviewTargetState,
   ReviewEvent,
   ScanReviewRecord,
 } from './contracts.js'

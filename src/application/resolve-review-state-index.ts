@@ -1,4 +1,4 @@
-import type { ResolvedReviewState } from '../domain/contracts.js'
+import type { ResolvedReviewTargetState } from '../domain/contracts.js'
 import type { ScanReviewStore } from '../domain/ports.js'
 import { buildResolvedReviewStateIndex } from './resolve-review-state.js'
 
@@ -14,7 +14,7 @@ export function createResolveReviewStateIndexUseCase({
   reviewEventSource,
 }: ResolveReviewStateIndexDependencies) {
   return async function resolveReviewStateIndex(): Promise<
-    ReadonlyMap<string, ResolvedReviewState>
+    ReadonlyMap<string, ResolvedReviewTargetState>
   > {
     const rawReviewEvents = await reviewEventSource.listReviewEvents()
 

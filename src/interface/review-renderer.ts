@@ -7,6 +7,7 @@ export function renderReviewJson(event: ReviewEvent): string {
 export function renderReviewPlainText(event: ReviewEvent): string {
   const lines = [
     `Review event appended: ${event.record_id}`,
+    `Target: ${event.review_target.target_id} [${event.review_target.kind}]`,
     `Outcome: ${event.outcome}`,
     `Source: ${event.review_source}`,
   ]

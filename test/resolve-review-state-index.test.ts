@@ -2,8 +2,9 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import { createResolveReviewStateIndexUseCase } from '../src/application/resolve-review-state-index.js'
-import type { ReviewEvent } from '../src/domain/contracts.js'
+import type { ReviewEvent, ReviewTarget } from '../src/domain/contracts.js'
 import type { ScanReviewStore } from '../src/domain/ports.js'
+import { reviewTargetScopeKey } from '../src/domain/review-targets.js'
 
 class InMemoryReviewEventSource implements Pick<ScanReviewStore, 'listReviewEvents'> {
   constructor(private readonly reviewEvents: ReviewEvent[]) {}
@@ -14,36 +15,48 @@ class InMemoryReviewEventSource implements Pick<ScanReviewStore, 'listReviewEven
 }
 
 test('resolveReviewStateIndex derives canonical labels from raw review history', async () => {
+  const record1Target = createReviewTarget('record-1')
+  const record2Target = createReviewTarget('record-2')
   const resolveReviewStateIndex = createResolveReviewStateIndexUseCase({
     reviewEventSource: new InMemoryReviewEventSource([
-      createReviewEvent('record-1', 'benign', '2026-04-01T00:00:00.000Z'),
-      createReviewEvent('record-1', 'needs_review', '2026-04-02T00:00:00.000Z'),
-      createReviewEvent('record-2', 'malicious', '2026-04-03T00:00:00.000Z'),
+      createReviewEvent(record1Target, 'benign', '2026-04-01T00:00:00.000Z'),
+      createReviewEvent(record1Target, 'needs_review', '2026-04-02T00:00:00.000Z'),
+      createReviewEvent(record2Target, 'malicious', '2026-04-03T00:00:00.000Z'),
     ]),
   })
 
   const resolvedReviewStateIndex = await resolveReviewStateIndex()
 
-  assert.equal(resolvedReviewStateIndex.get('record-1')?.workflow_status, 'needs_review')
-  assert.equal(resolvedReviewStateIndex.get('record-1')?.canonical_label, 'benign')
-  assert.equal(resolvedReviewStateIndex.get('record-2')?.workflow_status, 'resolved')
-  assert.equal(resolvedReviewStateIndex.get('record-2')?.canonical_label, 'malicious')
+  assert.equal(resolvedReviewStateIndex.get(reviewTargetScopeKey(record1Target))?.workflow_status, 'needs_review')
+  assert.equal(resolvedReviewStateIndex.get(reviewTargetScopeKey(record1Target))?.canonical_label, 'benign')
+  assert.equal(resolvedReviewStateIndex.get(reviewTargetScopeKey(record2Target))?.workflow_status, 'resolved')
+  assert.equal(resolvedReviewStateIndex.get(reviewTargetScopeKey(record2Target))?.canonical_label, 'malicious')
 })
 
 function createReviewEvent(
-  recordId: string,
+  reviewTarget: ReviewTarget,
   outcome: ReviewEvent['outcome'],
   createdAt: string,
 ): ReviewEvent {
   return {
-    event_id: `${createdAt}:${recordId}:${outcome}`,
-    record_id: recordId,
-    package_key: `${recordId}@1.0.0`,
+    event_id: `${createdAt}:${reviewTarget.target_id}:${outcome}`,
+    record_id: reviewTarget.record_id,
+    review_target: reviewTarget,
     created_at: createdAt,
     outcome,
     notes: null,
     resolution_timestamp: outcome === 'needs_review' ? null : createdAt,
     review_source: 'human',
     confidence: 0.9,
+  }
+}
+
+function createReviewTarget(recordId: string): ReviewTarget {
+  return {
+    kind: 'package_finding',
+    record_id: recordId,
+    target_id: `package_finding:${recordId}@1.0.0`,
+    finding_key: `package_finding:${recordId}@1.0.0`,
+    package_key: `${recordId}@1.0.0`,
   }
 }

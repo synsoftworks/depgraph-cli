@@ -139,7 +139,7 @@ This keeps the local dataset inspectable, scriptable, and cheap to evolve withou
 - [x] npm package scanning MVP
 - [x] rich Ink terminal UI
 - [x] deterministic JSON output for agents and CI
-- [x] breadth-first traversal with shortest suspicious paths
+- [x] traversal with shortest suspicious paths
 - [x] local scan persistence and append-only review capture
 - [x] dependency graph delta against prior local baseline
 - [x] basic local dataset evaluation
@@ -154,8 +154,6 @@ This keeps the local dataset inspectable, scriptable, and cheap to evolve withou
 DepGraph follows a simple rule: data first, presentation second.
 
 Each command produces structured scan data first, then renders it for either a human terminal session or an agent-oriented JSON consumer. The CLI is designed to work well for both without mixing business logic into presentation.
-
-For the system structure, storage model, and architectural invariants, see [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Contributing
 

@@ -9,6 +9,7 @@ test('plain text renderer surfaces changed edges before package findings', () =>
 
   assert.match(output, /Changed edges:/)
   assert.match(output, /root@1\.0\.0 -> child@1\.0\.0 \[direct\] via root@1\.0\.0 > child@1\.0\.0/)
+  assert.match(output, /target: edge_finding:direct:root@1\.0\.0->child@1\.0\.0/)
   assert.match(output, /Findings:/)
 })
 
@@ -56,6 +57,15 @@ function createResult(): ScanResult {
         path: ['root@1.0.0', 'child@1.0.0'],
         depth: 1,
         edge_type: 'direct',
+        review_target: {
+          kind: 'edge_finding',
+          record_id: '2026-04-01T00:00:00.000Z:root@1.0.0:depth=3',
+          target_id: 'edge_finding:direct:root@1.0.0->child@1.0.0',
+          edge_finding_key: 'edge_finding:direct:root@1.0.0->child@1.0.0',
+          parent_key: 'root@1.0.0',
+          child_key: 'child@1.0.0',
+          edge_type: 'direct',
+        },
         baseline_record_id: 'baseline-record',
         baseline_identity: {
           scan_target: 'root',
