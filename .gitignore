@@ -7,6 +7,9 @@ build/
 out/
 *.tsbuildinfo
 
+# npm pack (local tarballs; do not commit)
+*.tgz
+
 # Environment / secrets
 .env
 .env.*
