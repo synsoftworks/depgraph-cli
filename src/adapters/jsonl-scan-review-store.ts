@@ -4,9 +4,9 @@ import { dirname, join } from 'node:path'
 import type { BaselineIdentity, ReviewEvent, ScanReviewRecord } from '../domain/contracts.js'
 import { StorageFailureError } from '../domain/errors.js'
 import type { ScanReviewStore } from '../domain/ports.js'
+import { normalizeScanReviewRecord } from '../domain/scan-review-records.js'
 import {
   createPackageFindingReviewTarget,
-  normalizeScanReviewRecord,
 } from '../domain/review-targets.js'
 import { baselineKeyForIdentity } from '../domain/value-objects.js'
 

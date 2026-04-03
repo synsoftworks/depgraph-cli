@@ -13,10 +13,27 @@ import { createResolveReviewStateIndexUseCase } from '../src/application/resolve
 import { createReviewScanUseCase } from '../src/application/review-scan.js'
 import { createScanPackageUseCase } from '../src/application/scan-package.js'
 import type { PackageMetadata } from '../src/domain/contracts.js'
-import type { DependencyTraverser, RiskScorer, TraversedDependencyGraph } from '../src/domain/ports.js'
+import type {
+  PackageLockDependencyTraverser,
+  RegistryDependencyTraverser,
+  RiskScorer,
+  TraversedDependencyGraph,
+} from '../src/domain/ports.js'
 import { reviewTargetScopeKey } from '../src/domain/review-targets.js'
 
-class MutableTraverser implements DependencyTraverser {
+class MutableRegistryTraverser implements RegistryDependencyTraverser {
+  constructor(private graph: TraversedDependencyGraph) {}
+
+  setGraph(graph: TraversedDependencyGraph): void {
+    this.graph = graph
+  }
+
+  async traverse(): Promise<TraversedDependencyGraph> {
+    return this.graph
+  }
+}
+
+class MutablePackageLockTraverser implements PackageLockDependencyTraverser {
   constructor(private graph: TraversedDependencyGraph) {}
 
   setGraph(graph: TraversedDependencyGraph): void {
@@ -58,26 +75,30 @@ class StubScorer implements RiskScorer {
 test('Scenario A: repeat scan with the same projected structure does not create diff escalation', async () => {
   const workingDirectory = await mkdtemp(join(tmpdir(), 'depgraph-scenario-a-'))
   const store = new JsonlScanReviewStore(defaultScanReviewStorePaths(workingDirectory))
-  const traverser = new MutableTraverser(createGraph(['child@1.0.0']))
+  const registryTraverser = new MutableRegistryTraverser(createGraph(['child@1.0.0']))
+  const packageLockTraverser = new MutablePackageLockTraverser(createGraph(['child@1.0.0']))
   const scorer = new StubScorer({
     'root@1.0.0': 0.1,
     'child@1.0.0': 0,
   })
 
   const baselineScan = createScanPackageUseCase({
-    traverser,
+    registryTraverser,
+    packageLockTraverser,
     scorer,
     reviewStore: store,
     now: () => new Date('2026-04-01T00:00:00.000Z'),
   })
   const repeatScan = createScanPackageUseCase({
-    traverser,
+    registryTraverser,
+    packageLockTraverser,
     scorer,
     reviewStore: store,
     now: () => new Date('2026-04-02T00:00:00.000Z'),
   })
 
   const firstResult = await baselineScan({
+    scan_mode: 'registry_package',
     package_spec: 'root',
     max_depth: 3,
     threshold: 0.4,
@@ -85,6 +106,7 @@ test('Scenario A: repeat scan with the same projected structure does not create 
     workspace_identity: workingDirectory,
   })
   const secondResult = await repeatScan({
+    scan_mode: 'registry_package',
     package_spec: 'root',
     max_depth: 3,
     threshold: 0.4,
@@ -103,7 +125,8 @@ test('Scenario A: repeat scan with the same projected structure does not create 
 test('Scenario B: a suspicious new direct projected edge is captured as both an edge event and package finding', async () => {
   const workingDirectory = await mkdtemp(join(tmpdir(), 'depgraph-scenario-b-'))
   const store = new JsonlScanReviewStore(defaultScanReviewStorePaths(workingDirectory))
-  const traverser = new MutableTraverser(createGraph(['trusted@1.0.0']))
+  const registryTraverser = new MutableRegistryTraverser(createGraph(['trusted@1.0.0']))
+  const packageLockTraverser = new MutablePackageLockTraverser(createGraph(['trusted@1.0.0']))
   const scorer = new StubScorer({
     'root@1.0.0': 0.1,
     'trusted@1.0.0': 0,
@@ -111,19 +134,22 @@ test('Scenario B: a suspicious new direct projected edge is captured as both an 
   })
 
   const baselineScan = createScanPackageUseCase({
-    traverser,
+    registryTraverser,
+    packageLockTraverser,
     scorer,
     reviewStore: store,
     now: () => new Date('2026-04-01T00:00:00.000Z'),
   })
   const changedScan = createScanPackageUseCase({
-    traverser,
+    registryTraverser,
+    packageLockTraverser,
     scorer,
     reviewStore: store,
     now: () => new Date('2026-04-02T00:00:00.000Z'),
   })
 
   const baselineResult = await baselineScan({
+    scan_mode: 'registry_package',
     package_spec: 'root',
     max_depth: 3,
     threshold: 0.4,
@@ -131,9 +157,11 @@ test('Scenario B: a suspicious new direct projected edge is captured as both an 
     workspace_identity: workingDirectory,
   })
 
-  traverser.setGraph(createGraph(['trusted@1.0.0', 'new-child@1.0.0']))
+  registryTraverser.setGraph(createGraph(['trusted@1.0.0', 'new-child@1.0.0']))
+  packageLockTraverser.setGraph(createGraph(['trusted@1.0.0', 'new-child@1.0.0']))
 
   const changedResult = await changedScan({
+    scan_mode: 'registry_package',
     package_spec: 'root',
     max_depth: 3,
     threshold: 0.4,
@@ -161,6 +189,7 @@ test('Scenario B: a suspicious new direct projected edge is captured as both an 
     },
     baseline_record_id: baselineResult.record_id,
     baseline_identity: {
+      scan_mode: 'registry_package',
       scan_target: 'root',
       requested_depth: 3,
       workspace_identity: workingDirectory,
@@ -182,13 +211,15 @@ test('Scenario B: a suspicious new direct projected edge is captured as both an 
 test('Scenario C: review progression preserves append-only history and canonical label resolution', async () => {
   const workingDirectory = await mkdtemp(join(tmpdir(), 'depgraph-scenario-c-'))
   const store = new JsonlScanReviewStore(defaultScanReviewStorePaths(workingDirectory))
-  const traverser = new MutableTraverser(createGraph(['child@1.0.0']))
+  const registryTraverser = new MutableRegistryTraverser(createGraph(['child@1.0.0']))
+  const packageLockTraverser = new MutablePackageLockTraverser(createGraph(['child@1.0.0']))
   const scorer = new StubScorer({
     'root@1.0.0': 0.1,
     'child@1.0.0': 0.8,
   })
   const scanPackage = createScanPackageUseCase({
-    traverser,
+    registryTraverser,
+    packageLockTraverser,
     scorer,
     reviewStore: store,
     now: () => new Date('2026-04-01T00:00:00.000Z'),
@@ -215,6 +246,7 @@ test('Scenario C: review progression preserves append-only history and canonical
   })
 
   const scanResult = await scanPackage({
+    scan_mode: 'registry_package',
     package_spec: 'root',
     max_depth: 3,
     threshold: 0.4,

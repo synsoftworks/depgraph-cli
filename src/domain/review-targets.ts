@@ -4,7 +4,6 @@ import type {
   PackageFindingReviewTarget,
   ReviewTarget,
   ReviewTargetKind,
-  ScanReviewRecord,
 } from './contracts.js'
 import type { ScanFinding } from './entities.js'
 
@@ -78,16 +77,6 @@ export function normalizeEdgeFinding(recordId: string, edgeFinding: EdgeFinding)
   return {
     ...edgeFinding,
     review_target: reviewTarget,
-  }
-}
-
-export function normalizeScanReviewRecord(record: ScanReviewRecord): ScanReviewRecord {
-  return {
-    ...record,
-    findings: record.findings.map((finding) => normalizeScanFinding(record.record_id, finding)),
-    edge_findings: record.edge_findings.map((edgeFinding) =>
-      normalizeEdgeFinding(record.record_id, edgeFinding),
-    ),
   }
 }
 

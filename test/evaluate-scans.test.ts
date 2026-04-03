@@ -86,15 +86,17 @@ function createRecord(): ScanReviewRecord {
   return {
     record_id: 'record-1',
     created_at: '2026-04-01T00:00:00.000Z',
+    scan_mode: 'registry_package',
     package: { name: 'root', version: '1.0.0' },
     package_key: 'root@1.0.0',
     scan_target: 'root',
     baseline_identity: {
+      scan_mode: 'registry_package',
       scan_target: 'root',
       requested_depth: 3,
       workspace_identity: '/tmp/workspace',
     },
-    baseline_key: 'root::depth=3::workspace=/tmp/workspace',
+    baseline_key: 'registry_package::root::depth=3::workspace=/tmp/workspace',
     baseline_record_id: null,
     requested_depth: 3,
     threshold: 0.4,
@@ -143,6 +145,7 @@ function createRecord(): ScanReviewRecord {
       version: '1.0.0',
       key: 'root@1.0.0',
       depth: 0,
+      is_project_root: false,
       age_days: 1,
       weekly_downloads: 1000,
       dependents_count: null,
@@ -172,6 +175,7 @@ function createRecord(): ScanReviewRecord {
           version: '1.0.0',
           key: 'child@1.0.0',
           depth: 1,
+          is_project_root: false,
           age_days: 1,
           weekly_downloads: null,
           dependents_count: 42,
@@ -207,6 +211,48 @@ function createRecord(): ScanReviewRecord {
     edge_findings: [],
   }
 }
+
+test('evaluate scans excludes synthetic project roots from metadata coverage stats', async () => {
+  const reviewStore = new InMemoryReviewStore(
+    [
+      {
+        ...createRecord(),
+        scan_mode: 'package_lock',
+        root: {
+          ...createRecord().root,
+          is_project_root: true,
+          age_days: null,
+          weekly_downloads: null,
+          dependents_count: null,
+          published_at: null,
+          first_published: null,
+          last_published: null,
+          total_versions: null,
+          publish_events_last_30_days: null,
+        },
+        total_scanned: 2,
+      },
+    ],
+    [],
+  )
+  const evaluateScans = createEvaluateScansUseCase({
+    scanRecordSource: reviewStore,
+    rawReviewEventSource: reviewStore,
+    resolveReviewStateIndex: createResolveReviewStateIndexUseCase({
+      reviewEventSource: reviewStore,
+    }),
+  })
+
+  const summary = await evaluateScans()
+
+  assert.equal(summary.metadata_coverage.weekly_downloads.total_nodes, 1)
+  assert.equal(summary.metadata_coverage.weekly_downloads.missing_count, 1)
+  assert.equal(summary.metadata_coverage.dependents_count.total_nodes, 1)
+  assert.deepEqual(summary.metadata_coverage.signal_frequency_by_weekly_downloads.known, [])
+  assert.deepEqual(summary.metadata_coverage.signal_frequency_by_weekly_downloads.missing, [
+    { type: 'child_signal', count: 1 },
+  ])
+})
 
 function createReviewEvent(outcome: ReviewEvent['outcome'], createdAt: string): ReviewEvent {
   return {

@@ -47,3 +47,6 @@ AGENTS.md
 
 # depgraph
 .depgraph/
+
+# Internal local docs / ADRs
+.internal/

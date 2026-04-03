@@ -50,7 +50,9 @@ function ScanResultView({ result }: { result: ScanResult }): React.JSX.Element {
         <Text color="gray">SCANNING</Text>
         <Text bold color="white">
           {result.root.key}
-          <Text color="gray">{` · depth: ${result.requested_depth} · visited: ${result.total_scanned}`}</Text>
+          <Text color="gray">
+            {` · mode: ${result.scan_mode} · depth: ${result.requested_depth} · visited: ${result.total_scanned}`}
+          </Text>
         </Text>
       </Box>
 
@@ -162,6 +164,7 @@ function TreeRow({
         {node.name}
       </Text>
       <Text color="gray">{`@${node.version}`}</Text>
+      {node.is_project_root ? <Text color="gray">{' · project root'}</Text> : null}
       <RiskBadge level={node.risk_level} />
     </Box>
   )
@@ -179,7 +182,7 @@ function FindingPanel({
   const details: Array<[string, string, string]> = [
     ['age', formatAge(node.age_days), 'redBright'],
     ['downloads', formatDownloads(node.weekly_downloads, node.is_security_tombstone), 'redBright'],
-    ['versions', `${node.total_versions} published`, 'yellowBright'],
+    ['versions', formatPublishedVersions(node.total_versions), 'yellowBright'],
     ['risk score', `${finding.risk_score.toFixed(2)} (threshold: ${threshold.toFixed(2)})`, 'redBright'],
   ]
 
@@ -389,7 +392,11 @@ function formatSignalLabel(type: string): string {
   }
 }
 
-function formatAge(days: number): string {
+function formatAge(days: number | null): string {
+  if (days === null) {
+    return 'n/a'
+  }
+
   if (days === 0) {
     return 'today'
   }
@@ -399,6 +406,14 @@ function formatAge(days: number): string {
   }
 
   return `${days.toLocaleString()} days old`
+}
+
+function formatPublishedVersions(totalVersions: number | null): string {
+  if (totalVersions === null) {
+    return 'n/a'
+  }
+
+  return `${totalVersions} published`
 }
 
 function formatDownloads(downloads: number | null, isSecurityTombstone: boolean): string {

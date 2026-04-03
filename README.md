@@ -48,6 +48,18 @@ Scan the same package with JSON output:
 depgraph scan axios --json --depth 2
 ```
 
+Scan a local project from an explicit lockfile path:
+
+```bash
+depgraph scan --package-lock ./package-lock.json
+```
+
+Detect a supported lockfile in the current project root:
+
+```bash
+depgraph scan --project . --json
+```
+
 Append a review outcome to a stored scan finding:
 
 ```bash
@@ -66,6 +78,8 @@ Plain-text output from a real scan:
 
 ```text
 Scan: plain-crypto-js@0.0.1-security.0
+Mode: registry_package
+Target: plain-crypto-js
 Overall risk: critical (1.00)
 Total scanned: 1
 Suspicious packages: 1
@@ -95,6 +109,7 @@ Trimmed example:
 ```json
 {
   "record_id": "2026-04-02T00:00:00.000Z:axios@1.14.0:depth=2",
+  "scan_mode": "registry_package",
   "scan_target": "axios",
   "baseline_record_id": null,
   "requested_depth": 2,
@@ -114,6 +129,13 @@ Trimmed example:
 ```
 
 This mode is intended for automation, CI checks, and agent tooling that needs machine-readable output instead of terminal formatting.
+
+## Current Scan Modes
+
+- `registry_package` scans start from an npm package spec and resolve structure from registry metadata
+- `package_lock` scans start from a local `package-lock.json` and read dependency structure from the lockfile itself
+
+`package_lock` scanning currently supports `package-lock.json` with `lockfileVersion >= 2` and a `packages` map only.
 
 ## How Risk Scoring Works
 
@@ -147,7 +169,7 @@ This keeps the local dataset inspectable, scriptable, and cheap to evolve withou
 - [x] local scan persistence and append-only review capture
 - [x] projected dependency edge delta against prior local baseline
 - [x] basic local dataset evaluation
-- [ ] lockfile scanning
+- [x] package-lock.json project scanning
 - [ ] advisory integration
 - [ ] stronger composite signals
 - [ ] sensitive import analysis

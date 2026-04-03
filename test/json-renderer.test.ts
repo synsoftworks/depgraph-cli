@@ -7,6 +7,7 @@ import { renderJson } from '../src/interface/json-renderer.js'
 function createResult(): ScanResult {
   return {
     record_id: '2026-04-01T00:00:00.000Z:root@1.0.0:depth=3',
+    scan_mode: 'registry_package',
     scan_target: 'root',
     baseline_record_id: null,
     requested_depth: 3,
@@ -16,6 +17,7 @@ function createResult(): ScanResult {
       version: '1.0.0',
       key: 'root@1.0.0',
       depth: 0,
+      is_project_root: false,
       age_days: 10,
       weekly_downloads: 1000,
       dependents_count: null,
@@ -52,6 +54,7 @@ function createResult(): ScanResult {
         },
         baseline_record_id: 'baseline-record',
         baseline_identity: {
+          scan_mode: 'registry_package',
           scan_target: 'root',
           requested_depth: 3,
           workspace_identity: '/tmp/workspace',
@@ -112,6 +115,7 @@ test('scan JSON contract remains stable and deterministic', () => {
   assert.doesNotThrow(() => JSON.parse(first))
   assert.deepEqual(Object.keys(parsed), [
     'record_id',
+    'scan_mode',
     'scan_target',
     'baseline_record_id',
     'requested_depth',
@@ -169,6 +173,7 @@ test('scan JSON contract remains stable and deterministic', () => {
     },
     baseline_record_id: 'baseline-record',
     baseline_identity: {
+      scan_mode: 'registry_package',
       scan_target: 'root',
       requested_depth: 3,
       workspace_identity: '/tmp/workspace',

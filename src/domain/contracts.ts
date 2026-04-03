@@ -23,13 +23,30 @@ export interface DependencyPath {
   packages: ResolvedPackage[]
 }
 
-export interface ScanRequest {
+// Scan mode records which structural source produced the scan.
+// Baseline matching and downstream analysis must keep these source types separate.
+export type ScanMode = 'registry_package' | 'package_lock'
+
+export interface RegistryPackageScanRequest {
+  scan_mode: 'registry_package'
   package_spec: string
   max_depth: number
   threshold: number
   verbose: boolean
   workspace_identity?: string
 }
+
+export interface PackageLockScanRequest {
+  scan_mode: 'package_lock'
+  package_lock_path: string
+  project_root: string
+  max_depth: number
+  threshold: number
+  verbose: boolean
+  workspace_identity?: string
+}
+
+export type ScanRequest = RegistryPackageScanRequest | PackageLockScanRequest
 
 export interface PackageMetadata {
   package: ResolvedPackage
@@ -63,6 +80,8 @@ export interface DependencyGraphEdge {
 }
 
 export interface BaselineIdentity {
+  // Cross-mode baselines are invalid even when target and workspace match.
+  scan_mode: ScanMode
   scan_target: string
   requested_depth: number
   workspace_identity: string
@@ -85,6 +104,7 @@ export interface EdgeFinding {
 export interface ScanReviewRecord {
   record_id: string
   created_at: string
+  scan_mode: ScanMode
   package: ResolvedPackage
   package_key: string
   scan_target: string

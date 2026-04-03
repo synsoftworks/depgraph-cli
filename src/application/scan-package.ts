@@ -2,23 +2,28 @@ import type {
   BaselineIdentity,
   DependencyGraphEdge,
   EdgeFinding,
+  PackageLockScanRequest,
   RiskAssessment,
+  ScanMode,
   ScanRequest,
   ScanReviewRecord,
 } from '../domain/contracts.js'
 import type { PackageNode, RiskSignal, ScanFinding, ScanResult } from '../domain/entities.js'
 import { InvalidUsageError } from '../domain/errors.js'
 import type {
-  DependencyTraverser,
+  PackageLockDependencyTraverser,
+  RegistryDependencyTraverser,
   RiskScorer,
   ScanReviewStore,
   TraversedDependencyGraph,
+  TraversedPackageNode,
 } from '../domain/ports.js'
 import {
   baselineIdentityForScan,
   baselineKeyForIdentity,
   calculateAgeDays,
   normalizeMaxDepth,
+  normalizeProjectScanTarget,
   normalizeScanTarget,
   normalizeThreshold,
   packageKey,
@@ -33,7 +38,8 @@ import {
 } from '../domain/review-targets.js'
 
 interface ScanPackageDependencies {
-  traverser: DependencyTraverser
+  registryTraverser: RegistryDependencyTraverser
+  packageLockTraverser: PackageLockDependencyTraverser
   scorer: RiskScorer
   reviewStore: ScanReviewStore
   now?: () => Date
@@ -48,27 +54,35 @@ type PendingEdgeFinding = Omit<EdgeFinding, 'review_target'>
 type PendingScanFinding = Omit<ScanFinding, 'review_target'>
 
 export function createScanPackageUseCase({
-  traverser,
+  registryTraverser,
+  packageLockTraverser,
   scorer,
   reviewStore,
   now = () => new Date(),
 }: ScanPackageDependencies) {
   return async function scanPackage(request: ScanRequest): Promise<ScanResult> {
     const startedAt = now()
-    const packageSpec = parsePackageSpec(request.package_spec)
-    const scanTarget = normalizeScanTarget(request.package_spec)
     const maxDepth = normalizeMaxDepth(request.max_depth)
     const threshold = normalizeThreshold(request.threshold)
+    const traversedGraph = await traverseForRequest(
+      request,
+      maxDepth,
+      registryTraverser,
+      packageLockTraverser,
+    )
+    const scanTarget = resolveScanTarget(request, traversedGraph)
     const baselineIdentity = baselineIdentityForScan(
+      request.scan_mode,
       scanTarget,
       maxDepth,
-      request.workspace_identity,
+      resolveWorkspaceIdentity(request),
     )
     const baselineKey = baselineKeyForIdentity(baselineIdentity)
-    const traversedGraph = await traverser.traverse(packageSpec, maxDepth)
 
     if (traversedGraph.root_key.length === 0 || traversedGraph.nodes.length === 0) {
-      throw new InvalidUsageError(`No dependency structure could be resolved for "${request.package_spec}".`)
+      throw new InvalidUsageError(
+        `No dependency structure could be resolved for "${describeScanSource(request)}".`,
+      )
     }
 
     const edgeSnapshots = buildDependencyEdgeSnapshots(traversedGraph)
@@ -81,39 +95,13 @@ export function createScanPackageUseCase({
     let overallRiskScore = 0
 
     for (const traversedNode of traversedGraph.nodes) {
-      let assessment = scorer.assessPackage(traversedNode.metadata, {
-        depth: traversedNode.depth,
-        path: traversedNode.path,
-        dependency_count: Object.keys(traversedNode.metadata.dependencies).length,
-      })
+      let assessment = assessTraversedNode(traversedNode, scorer)
 
       if (traversedNode.key === traversedGraph.root_key && deltaSignals.length > 0) {
         assessment = mergeRiskSignals(assessment, deltaSignals)
       }
 
-      const packageNode: PackageNode = {
-        name: traversedNode.package.name,
-        version: traversedNode.package.version,
-        key: traversedNode.key,
-        depth: traversedNode.depth,
-        age_days: calculateAgeDays(traversedNode.metadata.published_at, startedAt),
-        weekly_downloads: traversedNode.metadata.weekly_downloads,
-        dependents_count: traversedNode.metadata.dependents_count,
-        deprecated_message: traversedNode.metadata.deprecated_message,
-        is_security_tombstone: traversedNode.metadata.is_security_tombstone,
-        published_at: traversedNode.metadata.published_at,
-        first_published: traversedNode.metadata.first_published_at,
-        last_published: traversedNode.metadata.last_published_at,
-        total_versions: traversedNode.metadata.total_versions,
-        dependency_count: Object.keys(traversedNode.metadata.dependencies).length,
-        publish_events_last_30_days: traversedNode.metadata.publish_events_last_30_days,
-        has_advisories: traversedNode.metadata.has_advisories,
-        risk_score: assessment.risk_score,
-        risk_level: assessment.risk_level,
-        signals: assessment.signals,
-        recommendation: assessment.recommendation,
-        dependencies: [],
-      }
+      const packageNode = toPackageNode(traversedNode, assessment, startedAt)
 
       nodeMap.set(traversedNode.key, packageNode)
       overallRiskScore = Math.max(overallRiskScore, assessment.risk_score)
@@ -170,6 +158,7 @@ export function createScanPackageUseCase({
     }))
     const result: ScanResult = {
       record_id: recordId,
+      scan_mode: request.scan_mode,
       scan_target: scanTarget,
       baseline_record_id: previousRecord?.record_id ?? null,
       requested_depth: maxDepth,
@@ -201,12 +190,106 @@ export function createScanPackageUseCase({
   }
 }
 
+async function traverseForRequest(
+  request: ScanRequest,
+  maxDepth: number,
+  registryTraverser: RegistryDependencyTraverser,
+  packageLockTraverser: PackageLockDependencyTraverser,
+): Promise<TraversedDependencyGraph> {
+  switch (request.scan_mode) {
+    case 'registry_package':
+      return registryTraverser.traverse(parsePackageSpec(request.package_spec), maxDepth)
+    case 'package_lock':
+      return packageLockTraverser.traverse(request.package_lock_path, maxDepth)
+  }
+}
+
+function resolveScanTarget(request: ScanRequest, traversedGraph: TraversedDependencyGraph): string {
+  switch (request.scan_mode) {
+    case 'registry_package':
+      return normalizeScanTarget(request.package_spec)
+    case 'package_lock':
+      return normalizeProjectScanTarget(
+        traversedGraph.nodes[0]?.package.name,
+        request.project_root,
+      )
+  }
+}
+
+function resolveWorkspaceIdentity(request: ScanRequest): string | undefined {
+  return request.workspace_identity ?? (request.scan_mode === 'package_lock' ? request.project_root : undefined)
+}
+
+function describeScanSource(request: ScanRequest): string {
+  switch (request.scan_mode) {
+    case 'registry_package':
+      return request.package_spec
+    case 'package_lock':
+      return request.package_lock_path
+  }
+}
+
+function assessTraversedNode(
+  traversedNode: TraversedPackageNode,
+  scorer: RiskScorer,
+): RiskAssessment {
+  if (traversedNode.is_virtual_root === true) {
+    return {
+      risk_score: 0,
+      risk_level: 'safe',
+      recommendation: 'install',
+      signals: [],
+    }
+  }
+
+  return scorer.assessPackage(traversedNode.metadata, {
+    depth: traversedNode.depth,
+    path: traversedNode.path,
+    dependency_count: Object.keys(traversedNode.metadata.dependencies).length,
+  })
+}
+
 function buildExplanation(signals: PackageNode['signals']): string {
   if (signals.length === 0) {
     return 'No suspicious signals exceeded the configured threshold.'
   }
 
   return signals.map((signal) => signal.reason).join('; ')
+}
+
+function toPackageNode(
+  traversedNode: TraversedPackageNode,
+  assessment: RiskAssessment,
+  startedAt: Date,
+): PackageNode {
+  const isProjectRoot = traversedNode.is_virtual_root === true
+
+  return {
+    name: traversedNode.package.name,
+    version: traversedNode.package.version,
+    key: traversedNode.key,
+    depth: traversedNode.depth,
+    is_project_root: isProjectRoot,
+    age_days: isProjectRoot ? null : calculateAgeDays(traversedNode.metadata.published_at, startedAt),
+    weekly_downloads: isProjectRoot ? null : traversedNode.metadata.weekly_downloads,
+    dependents_count: isProjectRoot ? null : traversedNode.metadata.dependents_count,
+    deprecated_message: isProjectRoot ? null : traversedNode.metadata.deprecated_message,
+    is_security_tombstone: isProjectRoot ? false : traversedNode.metadata.is_security_tombstone,
+    published_at: isProjectRoot ? null : traversedNode.metadata.published_at,
+    first_published: isProjectRoot ? null : traversedNode.metadata.first_published_at,
+    last_published: isProjectRoot ? null : traversedNode.metadata.last_published_at,
+    total_versions: isProjectRoot ? null : traversedNode.metadata.total_versions,
+    dependency_count: Object.keys(traversedNode.metadata.dependencies).length,
+    publish_events_last_30_days: isProjectRoot
+      ? null
+      : traversedNode.metadata.publish_events_last_30_days,
+    has_advisories: isProjectRoot ? false : traversedNode.metadata.has_advisories,
+    risk_score: assessment.risk_score,
+    risk_level: assessment.risk_level,
+    signals: assessment.signals,
+    recommendation: assessment.recommendation,
+    dependencies: [],
+  }
 }
 
 function compareFindings(left: PendingScanFinding, right: PendingScanFinding): number {
@@ -338,6 +421,7 @@ function buildScanReviewRecord({
   return {
     record_id: result.record_id,
     created_at: result.timestamp,
+    scan_mode: result.scan_mode,
     package: pkg,
     package_key: packageKey(pkg),
     scan_target: result.scan_target,

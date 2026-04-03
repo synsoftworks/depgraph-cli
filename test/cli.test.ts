@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { resolve } from 'node:path'
 import test from 'node:test'
 
 import { run } from '../src/cli/index.js'
@@ -17,6 +18,7 @@ class MemoryStream {
 function createResult(suspiciousCount = 0): ScanResult {
   return {
     record_id: '2026-04-01T00:00:00.000Z:root@1.0.0:depth=3',
+    scan_mode: 'registry_package',
     scan_target: 'root',
     baseline_record_id: null,
     requested_depth: 3,
@@ -26,6 +28,7 @@ function createResult(suspiciousCount = 0): ScanResult {
       version: '1.0.0',
       key: 'root@1.0.0',
       depth: 0,
+      is_project_root: false,
       age_days: 10,
       weekly_downloads: 1000,
       dependents_count: null,
@@ -79,6 +82,18 @@ function createResult(suspiciousCount = 0): ScanResult {
     overall_risk_level: suspiciousCount > 0 ? 'critical' : 'safe',
     scan_duration_ms: 0,
     timestamp: '2026-04-01T00:00:00.000Z',
+  }
+}
+
+async function resolveProjectScan(projectPath: string) {
+  return {
+    scan_mode: 'package_lock' as const,
+    package_lock_path: `${projectPath}/package-lock.json`,
+    project_root: projectPath,
+    max_depth: 3,
+    threshold: 0.4,
+    verbose: false,
+    workspace_identity: projectPath,
   }
 }
 
@@ -166,6 +181,7 @@ test('CLI uses plain text renderer for --no-tui and returns suspicious exit code
 
   const exitCode = await run(['scan', 'root', '--no-tui'], {
     scanPackage: async () => createResult(1),
+    resolveProjectScan,
     reviewScan: async () => createReviewEvent(),
     evaluateScans: async () => createEvaluationSummary(),
     renderJson: () => {
@@ -200,6 +216,7 @@ test('CLI returns invalid usage exit code for malformed arguments', async () => 
 
   const exitCode = await run(['scan'], {
     scanPackage: async () => createResult(),
+    resolveProjectScan,
     reviewScan: async () => createReviewEvent(),
     evaluateScans: async () => createEvaluationSummary(),
     renderJson: () => '',
@@ -225,6 +242,7 @@ test('CLI maps network failures to exit code 3', async () => {
     scanPackage: async () => {
       throw new NetworkFailureError('registry down')
     },
+    resolveProjectScan,
     reviewScan: async () => createReviewEvent(),
     evaluateScans: async () => createEvaluationSummary(),
     renderJson: () => JSON.stringify(createResult()),
@@ -250,6 +268,7 @@ test('CLI review command forwards explicit target ids deterministically', async 
 
   const exitCode = await run(['review', 'scan-record-id', '--target', 'package_finding:root@1.0.0', '--outcome', 'benign', '--notes', 'checked', '--confidence', '0.8'], {
     scanPackage: async () => createResult(),
+    resolveProjectScan,
     reviewScan: async (request) => {
       reviewCalls += 1
       assert.deepEqual(request, {
@@ -284,6 +303,101 @@ test('CLI review command forwards explicit target ids deterministically', async 
   assert.equal(stderr.buffer, '')
 })
 
+test('CLI scan forwards explicit package-lock scans as package_lock mode', async () => {
+  const stdout = new MemoryStream()
+  const stderr = new MemoryStream()
+  let scanCalls = 0
+
+  const exitCode = await run(['scan', '--package-lock', './package-lock.json', '--json'], {
+    scanPackage: async (request) => {
+      scanCalls += 1
+      assert.deepEqual(request, {
+        scan_mode: 'package_lock',
+        package_lock_path: resolve('./package-lock.json'),
+        project_root: process.cwd(),
+        max_depth: 3,
+        threshold: 0.4,
+        verbose: false,
+        workspace_identity: process.cwd(),
+      })
+
+      return createResult()
+    },
+    resolveProjectScan,
+    reviewScan: async () => createReviewEvent(),
+    evaluateScans: async () => createEvaluationSummary(),
+    renderJson: () => JSON.stringify(createResult()),
+    renderPlainText: () => '',
+    renderReviewJson: () => '',
+    renderReviewPlainText: () => '',
+    renderEvaluationJson: () => '',
+    renderEvaluationPlainText: () => '',
+    renderInk: async () => {},
+    stdout,
+    stderr,
+    isTty: true,
+  })
+
+  assert.equal(exitCode, 0)
+  assert.equal(scanCalls, 1)
+  assert.equal(stderr.buffer, '')
+})
+
+test('CLI scan resolves --project through project detection before scanning', async () => {
+  const stdout = new MemoryStream()
+  const stderr = new MemoryStream()
+  let resolverCalls = 0
+  let scanCalls = 0
+
+  const exitCode = await run(['scan', '--project', '.'], {
+    scanPackage: async (request) => {
+      scanCalls += 1
+      assert.deepEqual(request, {
+        scan_mode: 'package_lock',
+        package_lock_path: '/tmp/example-project/package-lock.json',
+        project_root: '/tmp/example-project',
+        max_depth: 3,
+        threshold: 0.4,
+        verbose: false,
+        workspace_identity: '/tmp/example-project',
+      })
+
+      return createResult()
+    },
+    resolveProjectScan: async () => {
+      resolverCalls += 1
+
+      return {
+        scan_mode: 'package_lock',
+        package_lock_path: '/tmp/example-project/package-lock.json',
+        project_root: '/tmp/example-project',
+        max_depth: 3,
+        threshold: 0.4,
+        verbose: false,
+        workspace_identity: '/tmp/example-project',
+      }
+    },
+    reviewScan: async () => createReviewEvent(),
+    evaluateScans: async () => createEvaluationSummary(),
+    renderJson: () => '',
+    renderPlainText: () => 'plain text output',
+    renderReviewJson: () => '',
+    renderReviewPlainText: () => '',
+    renderEvaluationJson: () => '',
+    renderEvaluationPlainText: () => '',
+    renderInk: async () => {},
+    stdout,
+    stderr,
+    isTty: false,
+  })
+
+  assert.equal(exitCode, 0)
+  assert.equal(resolverCalls, 1)
+  assert.equal(scanCalls, 1)
+  assert.match(stdout.buffer, /plain text output/)
+  assert.equal(stderr.buffer, '')
+})
+
 test('CLI eval command renders evaluation summaries deterministically', async () => {
   const stdout = new MemoryStream()
   const stderr = new MemoryStream()
@@ -291,6 +405,7 @@ test('CLI eval command renders evaluation summaries deterministically', async ()
 
   const exitCode = await run(['eval'], {
     scanPackage: async () => createResult(),
+    resolveProjectScan,
     reviewScan: async () => createReviewEvent(),
     evaluateScans: async () => {
       evalCalls += 1
@@ -320,6 +435,7 @@ test('CLI scan help explains the current tree projection semantics', async () =>
 
   const exitCode = await run(['scan', '--help'], {
     scanPackage: async () => createResult(),
+    resolveProjectScan,
     reviewScan: async () => createReviewEvent(),
     evaluateScans: async () => createEvaluationSummary(),
     renderJson: () => '',
@@ -335,7 +451,7 @@ test('CLI scan help explains the current tree projection semantics', async () =>
   })
 
   assert.equal(exitCode, 0)
-  assert.match(stdout.buffer, /resolved dependency tree view from registry metadata/)
-  assert.match(stdout.buffer, /Shared packages may appear under a single path in the current view/)
+  assert.match(stdout.buffer, /Package-spec scans use registry metadata/)
+  assert.match(stdout.buffer, /Project scans currently support package-lock\.json only/)
   assert.equal(stderr.buffer, '')
 })

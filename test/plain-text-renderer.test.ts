@@ -7,6 +7,8 @@ import { renderPlainText } from '../src/interface/plain-text-renderer.js'
 test('plain text renderer surfaces changed edges from the current tree projection before package findings', () => {
   const output = renderPlainText(createResult())
 
+  assert.match(output, /Mode: registry_package/)
+  assert.match(output, /Target: root/)
   assert.match(output, /Changed edges in current tree view:/)
   assert.match(output, /root@1\.0\.0 -> child@1\.0\.0 \[direct\] via root@1\.0\.0 > child@1\.0\.0/)
   assert.match(output, /target: edge_finding:direct:root@1\.0\.0->child@1\.0\.0/)
@@ -16,6 +18,7 @@ test('plain text renderer surfaces changed edges from the current tree projectio
 function createResult(): ScanResult {
   return {
     record_id: '2026-04-01T00:00:00.000Z:root@1.0.0:depth=3',
+    scan_mode: 'registry_package',
     scan_target: 'root',
     baseline_record_id: 'baseline-record',
     requested_depth: 3,
@@ -25,6 +28,7 @@ function createResult(): ScanResult {
       version: '1.0.0',
       key: 'root@1.0.0',
       depth: 0,
+      is_project_root: false,
       age_days: 10,
       weekly_downloads: 1000,
       dependents_count: null,
@@ -68,6 +72,7 @@ function createResult(): ScanResult {
         },
         baseline_record_id: 'baseline-record',
         baseline_identity: {
+          scan_mode: 'registry_package',
           scan_target: 'root',
           requested_depth: 3,
           workspace_identity: '/tmp/workspace',

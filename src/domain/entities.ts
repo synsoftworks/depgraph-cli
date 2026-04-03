@@ -1,4 +1,4 @@
-import type { DependencyPath, EdgeFinding, PackageFindingReviewTarget } from './contracts.js'
+import type { DependencyPath, EdgeFinding, PackageFindingReviewTarget, ScanMode } from './contracts.js'
 
 export type RiskLevel = 'safe' | 'review' | 'critical'
 export type Recommendation = 'install' | 'review' | 'do_not_install'
@@ -18,17 +18,20 @@ export interface PackageNode {
   version: string
   key: string
   depth: number
-  age_days: number
+  // Project-root nodes from package-lock scans are structural roots, not published packages.
+  // Package-only metadata fields are therefore nullable on those nodes.
+  is_project_root: boolean
+  age_days: number | null
   weekly_downloads: number | null
   dependents_count: number | null
   deprecated_message: string | null
   is_security_tombstone: boolean
-  published_at: string
-  first_published: string
-  last_published: string
-  total_versions: number
+  published_at: string | null
+  first_published: string | null
+  last_published: string | null
+  total_versions: number | null
   dependency_count: number
-  publish_events_last_30_days: number
+  publish_events_last_30_days: number | null
   has_advisories: boolean
   risk_score: number
   risk_level: RiskLevel
@@ -53,6 +56,7 @@ export interface ScanFinding {
 
 export interface ScanResult {
   record_id: string
+  scan_mode: ScanMode
   scan_target: string
   baseline_record_id: string | null
   requested_depth: number
