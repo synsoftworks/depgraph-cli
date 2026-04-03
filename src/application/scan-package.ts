@@ -116,6 +116,20 @@ export function createScanPackageUseCase({
         })
       }
 
+      if (metadataStatusForNode(traversedNode) === 'unresolved_registry_lookup') {
+        warnings.push({
+          kind: 'unresolved_registry_lookup',
+          package_key: traversedNode.key,
+          package_name: traversedNode.package.name,
+          package_version: traversedNode.package.version,
+          message:
+            traversedNode.metadata_warning ??
+            `Registry metadata for ${traversedNode.key} could not be resolved.`,
+          lockfile_resolved_url: traversedNode.lockfile_resolved_url ?? null,
+          lockfile_integrity: traversedNode.lockfile_integrity ?? null,
+        })
+      }
+
       nodeMap.set(traversedNode.key, packageNode)
       overallRiskScore = Math.max(overallRiskScore, assessment.risk_score)
 
@@ -257,18 +271,31 @@ function assessTraversedNode(
   }
 
   if (traversedNode.metadata === null) {
+    const signals: RiskSignal[] = [
+      {
+        type: 'unresolved_registry_lookup',
+        value: traversedNode.key,
+        weight: 'low',
+        reason:
+          traversedNode.metadata_warning ??
+          `registry metadata for ${traversedNode.key} could not be resolved; dependency is being evaluated with incomplete evidence`,
+      },
+    ]
+    const riskScore = riskScoreForSignals(signals)
+    const riskLevel = riskLevelForScore(riskScore)
+
     return {
-      risk_score: 0,
-      risk_level: 'safe',
-      recommendation: 'install',
-      signals: [],
+      risk_score: riskScore,
+      risk_level: riskLevel,
+      recommendation: recommendationForRiskLevel(riskLevel),
+      signals,
     }
   }
 
   return scorer.assessPackage(traversedNode.metadata, {
     depth: traversedNode.depth,
     path: traversedNode.path,
-    dependency_count: Object.keys(traversedNode.resolved_dependencies).length,
+    dependency_count: Object.keys(resolvedDependenciesForNode(traversedNode)).length,
   })
 }
 
@@ -293,10 +320,10 @@ function toPackageNode(
     key: traversedNode.key,
     depth: traversedNode.depth,
     is_project_root: isProjectRoot,
-    metadata_status: traversedNode.metadata_status,
-    metadata_warning: traversedNode.metadata_warning,
-    lockfile_resolved_url: traversedNode.lockfile_resolved_url,
-    lockfile_integrity: traversedNode.lockfile_integrity,
+    metadata_status: metadataStatusForNode(traversedNode),
+    metadata_warning: traversedNode.metadata_warning ?? null,
+    lockfile_resolved_url: traversedNode.lockfile_resolved_url ?? null,
+    lockfile_integrity: traversedNode.lockfile_integrity ?? null,
     age_days:
       isProjectRoot || traversedNode.metadata === null
         ? null
@@ -317,11 +344,11 @@ function toPackageNode(
       isProjectRoot || traversedNode.metadata === null ? null : traversedNode.metadata.last_published_at,
     total_versions:
       isProjectRoot || traversedNode.metadata === null ? null : traversedNode.metadata.total_versions,
-    dependency_count: Object.keys(traversedNode.resolved_dependencies).length,
-    publish_events_last_30_days:
-      isProjectRoot || traversedNode.metadata === null
-        ? null
-        : traversedNode.metadata.publish_events_last_30_days,
+    dependency_count: Object.keys(resolvedDependenciesForNode(traversedNode)).length,
+    publish_events_last_30_days: isProjectRoot
+      || traversedNode.metadata === null
+      ? null
+      : traversedNode.metadata.publish_events_last_30_days,
     has_advisories:
       isProjectRoot || traversedNode.metadata === null ? false : traversedNode.metadata.has_advisories,
     risk_score: assessment.risk_score,
@@ -483,6 +510,26 @@ function buildScanReviewRecord({
     dependency_edges: dependencyEdges,
     edge_findings: edgeFindings,
   }
+}
+
+function metadataStatusForNode(traversedNode: TraversedPackageNode): PackageNode['metadata_status'] {
+  if (traversedNode.metadata_status !== undefined) {
+    return traversedNode.metadata_status
+  }
+
+  if (traversedNode.is_virtual_root === true) {
+    return 'synthetic_project_root'
+  }
+
+  if (traversedNode.metadata === null) {
+    return 'unresolved_registry_lookup'
+  }
+
+  return 'enriched'
+}
+
+function resolvedDependenciesForNode(traversedNode: TraversedPackageNode): Record<string, string> {
+  return traversedNode.resolved_dependencies ?? traversedNode.metadata?.dependencies ?? {}
 }
 
 export function isSuspiciousExitCode(result: ScanResult): number {

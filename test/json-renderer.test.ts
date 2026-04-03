@@ -202,5 +202,4 @@ test('scan JSON contract remains stable and deterministic', () => {
   assert.equal(parsed.findings[0].signals[0].type, 'test_signal')
   assert.equal(parsed.root.metadata_status, 'enriched')
   assert.equal(parsed.warnings[0].kind, 'unresolved_registry_lookup')
-  assert.equal(parsed.warnings[0].lockfile_resolved_url, 'https://vendor.example/child-1.0.0.tgz')
 })

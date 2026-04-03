@@ -412,6 +412,8 @@ function formatOverallRiskLabel(level: RiskLevel): string {
 
 function formatSignalLabel(type: string): string {
   switch (type) {
+    case 'unresolved_registry_lookup':
+      return 'registry metadata unavailable'
     case 'security_tombstone':
       return 'security tombstone'
     case 'new_and_unproven':

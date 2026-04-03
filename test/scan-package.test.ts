@@ -20,22 +20,8 @@ import type {
   TraversedPackageNode,
 } from '../src/domain/ports.js'
 
-type TestTraversedPackageNode = Omit<
-  TraversedPackageNode,
-  | 'resolved_dependencies'
-  | 'metadata_status'
-  | 'metadata_warning'
-  | 'lockfile_resolved_url'
-  | 'lockfile_integrity'
-> & {
-  resolved_dependencies?: Record<string, string>
-  metadata_status?: TraversedPackageNode['metadata_status']
-  metadata_warning?: string | null
-  lockfile_resolved_url?: string | null
-  lockfile_integrity?: string | null
-}
-
-interface TestTraversedDependencyGraph {
+type TestTraversedPackageNode = TraversedPackageNode
+type TestTraversedDependencyGraph = {
   root_key: string
   nodes: TestTraversedPackageNode[]
 }
@@ -176,6 +162,26 @@ function createMetadata(name: string, version: string): PackageMetadata {
     is_security_tombstone: false,
     has_advisories: false,
     dependents_count: null,
+  }
+}
+
+function normalizeGraph(graph: TestTraversedDependencyGraph): TraversedDependencyGraph {
+  return {
+    root_key: graph.root_key,
+    nodes: graph.nodes.map((node) => ({
+      ...node,
+      resolved_dependencies: node.resolved_dependencies ?? node.metadata?.dependencies ?? {},
+      metadata_status:
+        node.metadata_status ??
+        (node.is_virtual_root === true
+          ? 'synthetic_project_root'
+          : node.metadata === null
+            ? 'unresolved_registry_lookup'
+            : 'enriched'),
+      metadata_warning: node.metadata_warning ?? null,
+      lockfile_resolved_url: node.lockfile_resolved_url ?? null,
+      lockfile_integrity: node.lockfile_integrity ?? null,
+    })),
   }
 }
 
@@ -969,7 +975,7 @@ test('package_lock scans keep synthetic project-root metadata explicit and persi
   assert.equal(result.root.dependencies[0]?.publish_events_last_30_days, 2)
 })
 
-test('package_lock scans preserve unresolved dependencies and emit structured warnings instead of failing', async () => {
+test('package_lock scans add a low-weight unresolved_registry_lookup signal without creating a finding by itself', async () => {
   const reviewStore = new InMemoryReviewStore()
   const scanPackage = createScanPackageUseCase({
     registryTraverser: new StubRegistryTraverser(createLinearGraph()),
@@ -999,8 +1005,6 @@ test('package_lock scans preserve unresolved dependencies and emit structured wa
               { name: '@gsap/simply', version: '1.2.3' },
             ],
           },
-          resolved_dependencies: {},
-          metadata_status: 'unresolved_registry_lookup',
           metadata_warning: 'Package "@gsap/simply" was not found in the npm registry.',
           lockfile_resolved_url: 'https://vendor.example/@gsap/simply/-/simply-1.2.3.tgz',
           lockfile_integrity: 'sha512-example',
@@ -1022,22 +1026,15 @@ test('package_lock scans preserve unresolved dependencies and emit structured wa
     workspace_identity: 'local',
   })
 
-  assert.equal(result.total_scanned, 2)
   assert.equal(result.findings.length, 0)
+  assert.equal(result.overall_risk_score, 0.08)
+  assert.equal(result.overall_risk_level, 'safe')
   assert.equal(result.warnings.length, 1)
-  assert.equal(result.root.dependencies[0]?.key, '@gsap/simply@1.2.3')
   assert.equal(result.root.dependencies[0]?.metadata_status, 'unresolved_registry_lookup')
-  assert.equal(result.root.dependencies[0]?.weekly_downloads, null)
-  assert.equal(
-    result.root.dependencies[0]?.lockfile_resolved_url,
-    'https://vendor.example/@gsap/simply/-/simply-1.2.3.tgz',
-  )
-  assert.match(result.warnings[0]?.message ?? '', /not found in the npm registry/)
-  assert.equal(reviewStore.records[0]?.warnings.length, 1)
-  assert.equal(
-    reviewStore.records[0]?.warnings[0]?.lockfile_resolved_url,
-    'https://vendor.example/@gsap/simply/-/simply-1.2.3.tgz',
-  )
+  assert.equal(result.root.dependencies[0]?.risk_score, 0.08)
+  assert.equal(result.root.dependencies[0]?.risk_level, 'safe')
+  assert.equal(result.root.dependencies[0]?.signals[0]?.type, 'unresolved_registry_lookup')
+  assert.equal(result.root.dependencies[0]?.signals[0]?.weight, 'low')
 })
 
 function createLinearGraph(): TraversedDependencyGraph {

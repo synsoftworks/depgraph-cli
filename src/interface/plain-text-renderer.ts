@@ -18,9 +18,7 @@ export function renderPlainText(result: ScanResult): string {
     lines.push('- none')
   } else {
     for (const warning of result.warnings) {
-      lines.push(
-        `- ${warning.package_key} [${warning.kind}] ${warning.message}`,
-      )
+      lines.push(`- ${warning.package_key} [${warning.kind}] ${warning.message}`)
 
       if (warning.lockfile_resolved_url !== null) {
         lines.push(`  resolved: ${warning.lockfile_resolved_url}`)

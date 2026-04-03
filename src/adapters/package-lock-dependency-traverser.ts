@@ -83,7 +83,7 @@ export class PackageLockDependencyTraverser implements PackageLockDependencyTrav
         break
       }
 
-      const metadata =
+      const enrichment =
         item.entry_path === ''
           ? createSyntheticRootMetadata(rootPackage, rootDependencies, packageEntries)
           : await resolveExactPackageMetadata(
@@ -99,7 +99,7 @@ export class PackageLockDependencyTraverser implements PackageLockDependencyTrav
                 error,
               ),
             )
-      const key = packageKey(metadata.package)
+      const key = packageKey(enrichment.package)
 
       if (visited.has(key)) {
         continue
@@ -108,16 +108,16 @@ export class PackageLockDependencyTraverser implements PackageLockDependencyTrav
       visited.add(key)
 
       const path = {
-        packages: [...item.path_packages, metadata.package],
+        packages: [...item.path_packages, enrichment.package],
       }
 
       nodes.push({
         key,
-        package: metadata.package,
-        metadata: metadata.metadata,
-        resolved_dependencies: metadata.resolved_dependencies,
-        metadata_status: metadata.metadata_status,
-        metadata_warning: metadata.metadata_warning,
+        package: enrichment.package,
+        metadata: enrichment.metadata,
+        resolved_dependencies: enrichment.resolved_dependencies,
+        metadata_status: enrichment.metadata_status,
+        metadata_warning: enrichment.metadata_warning,
         lockfile_resolved_url: packageEntries.get(item.entry_path)?.resolved ?? null,
         lockfile_integrity: packageEntries.get(item.entry_path)?.integrity ?? null,
         depth: item.depth,
@@ -340,6 +340,8 @@ async function resolveExactPackageMetadata(
     version_range: packageVersion,
   })
   metadataCache.set(key, metadataPromise)
+  const metadata = await metadataPromise
+
   const metadata = await metadataPromise
 
   return {
