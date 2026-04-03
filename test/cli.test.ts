@@ -29,6 +29,10 @@ function createResult(suspiciousCount = 0): ScanResult {
       key: 'root@1.0.0',
       depth: 0,
       is_project_root: false,
+      metadata_status: 'enriched',
+      metadata_warning: null,
+      lockfile_resolved_url: null,
+      lockfile_integrity: null,
       age_days: 10,
       weekly_downloads: 1000,
       dependents_count: null,
@@ -80,6 +84,7 @@ function createResult(suspiciousCount = 0): ScanResult {
     safe_count: suspiciousCount > 0 ? 0 : 1,
     overall_risk_score: suspiciousCount > 0 ? 0.8 : 0.1,
     overall_risk_level: suspiciousCount > 0 ? 'critical' : 'safe',
+    warnings: [],
     scan_duration_ms: 0,
     timestamp: '2026-04-01T00:00:00.000Z',
   }

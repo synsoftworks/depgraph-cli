@@ -146,6 +146,10 @@ function createRecord(): ScanReviewRecord {
       key: 'root@1.0.0',
       depth: 0,
       is_project_root: false,
+      metadata_status: 'enriched',
+      metadata_warning: null,
+      lockfile_resolved_url: null,
+      lockfile_integrity: null,
       age_days: 1,
       weekly_downloads: 1000,
       dependents_count: null,
@@ -176,6 +180,10 @@ function createRecord(): ScanReviewRecord {
           key: 'child@1.0.0',
           depth: 1,
           is_project_root: false,
+          metadata_status: 'enriched',
+          metadata_warning: null,
+          lockfile_resolved_url: null,
+          lockfile_integrity: null,
           age_days: 1,
           weekly_downloads: null,
           dependents_count: 42,
@@ -209,6 +217,7 @@ function createRecord(): ScanReviewRecord {
     scan_duration_ms: 1,
     dependency_edges: [{ from: 'root@1.0.0', to: 'child@1.0.0', child_depth: 1 }],
     edge_findings: [],
+    warnings: [],
   }
 }
 
@@ -221,6 +230,7 @@ test('evaluate scans excludes synthetic project roots from metadata coverage sta
         root: {
           ...createRecord().root,
           is_project_root: true,
+          metadata_status: 'synthetic_project_root',
           age_days: null,
           weekly_downloads: null,
           dependents_count: null,

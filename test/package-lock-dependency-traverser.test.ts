@@ -6,13 +6,22 @@ import test from 'node:test'
 
 import { PackageLockDependencyTraverser } from '../src/adapters/package-lock-dependency-traverser.js'
 import type { PackageMetadata, PackageSpec } from '../src/domain/contracts.js'
+import { NetworkFailureError } from '../src/domain/errors.js'
 import type { PackageMetadataSource } from '../src/domain/ports.js'
 
 class StubPackageMetadataSource implements PackageMetadataSource {
-  constructor(private readonly metadataByKey: Record<string, PackageMetadata>) {}
+  constructor(
+    private readonly metadataByKey: Record<string, PackageMetadata>,
+    private readonly missingKeys: string[] = [],
+  ) {}
 
   async resolvePackage(spec: PackageSpec): Promise<PackageMetadata> {
     const key = `${spec.name}@${spec.version_range ?? 'latest'}`
+
+    if (this.missingKeys.includes(key)) {
+      throw new NetworkFailureError(`Package "${spec.name}" was not found in the npm registry.`)
+    }
+
     const metadata = this.metadataByKey[key]
 
     assert.ok(metadata, `Missing metadata for ${key}`)
@@ -72,6 +81,7 @@ test('package-lock traverser reads package-lock.json and resolves hoisted depend
 
   assert.equal(graph.root_key, 'example-project@1.0.0')
   assert.equal(graph.nodes[0]?.is_virtual_root, true)
+  assert.equal(graph.nodes[1]?.metadata_status, 'enriched')
   assert.deepEqual(
     graph.nodes.map((node) => ({
       key: node.key,
@@ -129,6 +139,53 @@ test('package-lock traverser rejects unsupported lockfile versions without a pac
     () => traverser.traverse(packageLockPath, 3),
     /lockfileVersion 2 or newer/,
   )
+})
+
+test('package-lock traverser preserves unresolved non-registry dependencies and lockfile provenance', async () => {
+  const workingDirectory = await mkdtemp(join(tmpdir(), 'depgraph-package-lock-'))
+  const packageLockPath = join(workingDirectory, 'package-lock.json')
+
+  await writeFile(
+    packageLockPath,
+    JSON.stringify({
+      name: 'example-project',
+      version: '1.0.0',
+      lockfileVersion: 3,
+      packages: {
+        '': {
+          name: 'example-project',
+          version: '1.0.0',
+          dependencies: {
+            '@gsap/simply': 'file:vendor/gsap-simply.tgz',
+          },
+        },
+        'node_modules/@gsap/simply': {
+          version: '1.2.3',
+          resolved: 'https://vendor.example/@gsap/simply/-/simply-1.2.3.tgz',
+          integrity: 'sha512-example',
+        },
+      },
+    }),
+    'utf8',
+  )
+
+  const traverser = new PackageLockDependencyTraverser(
+    new StubPackageMetadataSource({}, ['@gsap/simply@1.2.3']),
+  )
+
+  const graph = await traverser.traverse(packageLockPath, 3)
+  const unresolvedNode = graph.nodes.find((node) => node.key === '@gsap/simply@1.2.3')
+
+  assert.ok(unresolvedNode)
+  assert.equal(unresolvedNode.metadata, null)
+  assert.equal(unresolvedNode.metadata_status, 'unresolved_registry_lookup')
+  assert.match(unresolvedNode.metadata_warning ?? '', /not found in the npm registry/)
+  assert.equal(
+    unresolvedNode.lockfile_resolved_url,
+    'https://vendor.example/@gsap/simply/-/simply-1.2.3.tgz',
+  )
+  assert.equal(unresolvedNode.lockfile_integrity, 'sha512-example')
+  assert.equal(unresolvedNode.parent_key, 'example-project@1.0.0')
 })
 
 function createMetadata(

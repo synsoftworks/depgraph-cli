@@ -186,6 +186,10 @@ function createRecord({
       key: packageKey,
       depth: 0,
       is_project_root: false,
+      metadata_status: 'enriched',
+      metadata_warning: null,
+      lockfile_resolved_url: null,
+      lockfile_integrity: null,
       age_days: 1,
       weekly_downloads: 1000,
       dependents_count: null,
@@ -210,6 +214,7 @@ function createRecord({
     scan_duration_ms: 1,
     dependency_edges: dependencyEdges,
     edge_findings: [],
+    warnings: [],
   }
 }
 
