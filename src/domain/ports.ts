@@ -19,6 +19,7 @@ export interface TraversedPackageNode {
 }
 
 export interface TraversedDependencyGraph {
+  // v1 traversal returns a breadth-first tree projection keyed by first-seen resolved packages.
   root_key: string
   nodes: TraversedPackageNode[]
 }

@@ -128,7 +128,8 @@ function ChangedEdgesPanel({ edgeFindings }: { edgeFindings: EdgeFinding[] }): R
         paddingY={0}
         width={PANEL_WIDTH}
       >
-        <Text color="gray">CHANGED EDGES</Text>
+        <Text color="gray">CHANGED EDGES IN CURRENT TREE VIEW</Text>
+        <Text color="gray">current resolved view from registry metadata</Text>
         {edgeFindings.map((edgeFinding) => (
           <Box key={`${edgeFinding.parent_key}->${edgeFinding.child_key}`} flexDirection="column" marginBottom={1}>
             <Text color="yellowBright">

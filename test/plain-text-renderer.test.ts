@@ -4,10 +4,10 @@ import test from 'node:test'
 import type { ScanResult } from '../src/domain/entities.js'
 import { renderPlainText } from '../src/interface/plain-text-renderer.js'
 
-test('plain text renderer surfaces changed edges before package findings', () => {
+test('plain text renderer surfaces changed edges from the current tree projection before package findings', () => {
   const output = renderPlainText(createResult())
 
-  assert.match(output, /Changed edges:/)
+  assert.match(output, /Changed edges in current tree view:/)
   assert.match(output, /root@1\.0\.0 -> child@1\.0\.0 \[direct\] via root@1\.0\.0 > child@1\.0\.0/)
   assert.match(output, /target: edge_finding:direct:root@1\.0\.0->child@1\.0\.0/)
   assert.match(output, /Findings:/)

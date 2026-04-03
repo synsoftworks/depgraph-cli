@@ -8,7 +8,7 @@ export function renderPlainText(result: ScanResult): string {
     `Total scanned: ${result.total_scanned}`,
     `Suspicious packages: ${result.suspicious_count}`,
     '',
-    'Changed edges:',
+    'Changed edges in current tree view:',
   ]
 
   if (result.edge_findings.length === 0) {
@@ -40,7 +40,7 @@ export function renderPlainText(result: ScanResult): string {
     }
   }
 
-  lines.push('', 'Tree:')
+  lines.push('', 'Current tree view:')
   lines.push(...renderTree(result.root))
 
   return lines.join('\n')
