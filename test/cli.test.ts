@@ -313,3 +313,29 @@ test('CLI eval command renders evaluation summaries deterministically', async ()
   assert.match(stdout.buffer, /eval output/)
   assert.equal(stderr.buffer, '')
 })
+
+test('CLI scan help explains the current tree projection semantics', async () => {
+  const stdout = new MemoryStream()
+  const stderr = new MemoryStream()
+
+  const exitCode = await run(['scan', '--help'], {
+    scanPackage: async () => createResult(),
+    reviewScan: async () => createReviewEvent(),
+    evaluateScans: async () => createEvaluationSummary(),
+    renderJson: () => '',
+    renderPlainText: () => '',
+    renderReviewJson: () => '',
+    renderReviewPlainText: () => '',
+    renderEvaluationJson: () => '',
+    renderEvaluationPlainText: () => '',
+    renderInk: async () => {},
+    stdout,
+    stderr,
+    isTty: true,
+  })
+
+  assert.equal(exitCode, 0)
+  assert.match(stdout.buffer, /resolved dependency tree view from registry metadata/)
+  assert.match(stdout.buffer, /Shared packages may appear under a single path in the current view/)
+  assert.equal(stderr.buffer, '')
+})

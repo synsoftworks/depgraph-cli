@@ -47,6 +47,7 @@ export class RegistryDependencyTraverser implements DependencyTraverser {
       for (const { item, metadata } of levelMetadata) {
         const key = packageKey(metadata.package)
 
+        // v1 keeps the first parent/path discovered in BFS order and does not preserve additional parents.
         if (visited.has(key)) {
           continue
         }

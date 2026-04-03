@@ -10,7 +10,7 @@
   <a href="https://github.com/synsoftworks/depgraph-cli/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/github/license/synsoftworks/depgraph-cli?style=flat-square"></a>
 </p>
 
-DepGraph is a supply chain security tool that lives in your terminal, sniffs your npm dependency tree for attack signals, and tells you exactly why a package looks suspicious before you ship it.
+DepGraph is a supply chain security tool that lives in your terminal, scans an npm package plus its current registry-resolved dependency tree projection for attack signals, and tells you why a package looks suspicious before you ship it.
 
 Run it before every install. Use the JSON output in CI. Agent friendly 🤖
 
@@ -48,10 +48,10 @@ Scan the same package with JSON output:
 depgraph scan axios --json --depth 2
 ```
 
-Append a review outcome to a stored scan record:
+Append a review outcome to a stored scan finding:
 
 ```bash
-depgraph review <record_id> --outcome benign --notes "reviewed by analyst"
+depgraph review <record_id> --target package_finding:axios@1.14.0 --outcome benign --notes "reviewed by analyst"
 ```
 
 Inspect local dataset coverage:
@@ -70,11 +70,15 @@ Overall risk: critical (1.00)
 Total scanned: 1
 Suspicious packages: 1
 
+Changed edges in current tree view:
+- none
+
 Findings:
 - plain-crypto-js@0.0.1-security.0 [critical 1.00] via plain-crypto-js@0.0.1-security.0
+  target: package_finding:plain-crypto-js@0.0.1-security.0
   explanation: package was published 1 day(s) ago; package has only 1 published version(s); package is an npm security placeholder or tombstone for a previously malicious package
 
-Tree:
+Current tree view:
 - plain-crypto-js@0.0.1-security.0 [critical 1.00]
 ```
 
@@ -141,7 +145,7 @@ This keeps the local dataset inspectable, scriptable, and cheap to evolve withou
 - [x] deterministic JSON output for agents and CI
 - [x] traversal with shortest suspicious paths
 - [x] local scan persistence and append-only review capture
-- [x] dependency graph delta against prior local baseline
+- [x] projected dependency edge delta against prior local baseline
 - [x] basic local dataset evaluation
 - [ ] lockfile scanning
 - [ ] advisory integration

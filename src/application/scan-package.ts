@@ -68,7 +68,7 @@ export function createScanPackageUseCase({
     const traversedGraph = await traverser.traverse(packageSpec, maxDepth)
 
     if (traversedGraph.root_key.length === 0 || traversedGraph.nodes.length === 0) {
-      throw new InvalidUsageError(`No package graph could be resolved for "${request.package_spec}".`)
+      throw new InvalidUsageError(`No dependency structure could be resolved for "${request.package_spec}".`)
     }
 
     const edgeSnapshots = buildDependencyEdgeSnapshots(traversedGraph)
@@ -246,6 +246,7 @@ function mergeRiskSignals(assessment: RiskAssessment, extraSignals: PackageNode[
 }
 
 function buildDependencyEdgeSnapshots(graph: TraversedDependencyGraph): DependencyEdgeSnapshot[] {
+  // These snapshots come from the current BFS tree projection, not a full preserved dependency DAG.
   const snapshots = graph.nodes
     .filter((node) => node.parent_key !== null)
     .map((node) => ({
@@ -277,6 +278,7 @@ function buildEdgeFindings(
   currentEdges: DependencyEdgeSnapshot[],
   baselineIdentity: BaselineIdentity,
 ): PendingEdgeFinding[] {
+  // Baseline diffing compares projected edges from matching scans under the current v1 traversal model.
   if (previousRecord === null) {
     return []
   }

@@ -39,7 +39,7 @@ function createMetadata(
   }
 }
 
-test('BFS traverser returns closest path first and respects visited keys', async () => {
+test('BFS traverser returns the first-seen projection path and respects visited keys', async () => {
   const traverser = new RegistryDependencyTraverser(
     new StubPackageMetadataSource({
       root: createMetadata('root', '1.0.0', {
@@ -72,7 +72,7 @@ test('BFS traverser returns closest path first and respects visited keys', async
   )
 })
 
-test('BFS traverser enforces max depth using resolved name@version keys', async () => {
+test('BFS traverser projection enforces max depth using resolved name@version keys', async () => {
   const traverser = new RegistryDependencyTraverser(
     new StubPackageMetadataSource({
       root: createMetadata('root', '1.0.0', {
@@ -99,7 +99,7 @@ test('BFS traverser enforces max depth using resolved name@version keys', async 
   )
 })
 
-test('BFS traverser resolves siblings at the same depth concurrently', async () => {
+test('BFS traverser resolves siblings at the same depth concurrently before projection dedupe', async () => {
   const metadataBySpec = {
     root: createMetadata('root', '1.0.0', {
       a: '^1.0.0',

@@ -19,6 +19,7 @@ export interface ResolvedPackage {
 }
 
 export interface DependencyPath {
+  // v1 paths follow the current BFS tree projection, not every possible parent path in the underlying DAG.
   packages: ResolvedPackage[]
 }
 
@@ -54,6 +55,8 @@ export interface RiskAssessment {
 }
 
 export interface DependencyGraphEdge {
+  // Despite the name, v1 stores edges from the current BFS dependency tree projection.
+  // Shared packages collapsed by the traverser may have additional real parents that are not represented here.
   from: string
   to: string
   child_depth: number
@@ -66,6 +69,7 @@ export interface BaselineIdentity {
 }
 
 export interface EdgeFinding {
+  // Edge findings describe newly introduced projected edges relative to the latest matching baseline scan.
   parent_key: string
   child_key: string
   path: string[]
@@ -98,6 +102,7 @@ export interface ScanReviewRecord {
   suspicious_count: number
   safe_count: number
   scan_duration_ms: number
+  // Projected edges captured from the current v1 traversal model.
   dependency_edges: DependencyGraphEdge[]
   edge_findings: EdgeFinding[]
 }

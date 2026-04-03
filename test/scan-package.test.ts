@@ -431,7 +431,7 @@ test('scan use case persists a durable scan review record after the scan complet
   })
 })
 
-test('dependency graph delta is omitted when there is no prior scan', async () => {
+test('projected dependency edge delta is omitted when there is no prior scan', async () => {
   const reviewStore = new InMemoryReviewStore()
   const scanPackage = createScanPackageUseCase({
     traverser: new StubTraverser(createLinearGraph()),
@@ -456,7 +456,7 @@ test('dependency graph delta is omitted when there is no prior scan', async () =
   assert.deepEqual(reviewStore.records[0]?.edge_findings, [])
 })
 
-test('dependency graph delta is omitted when the prior scan has identical edges', async () => {
+test('projected dependency edge delta is omitted when the prior scan has identical edges', async () => {
   const reviewStore = new InMemoryReviewStore([
     createStoredRecord({
       dependencyEdges: [
@@ -487,7 +487,7 @@ test('dependency graph delta is omitted when the prior scan has identical edges'
   assert.deepEqual(reviewStore.records.at(-1)?.edge_findings, [])
 })
 
-test('dependency graph delta records newly introduced edges against the latest prior scan', async () => {
+test('projected dependency edge delta records newly introduced edges against the latest prior scan', async () => {
   const reviewStore = new InMemoryReviewStore([
     createStoredRecord({
       dependencyEdges: [
@@ -575,7 +575,7 @@ test('dependency graph delta records newly introduced edges against the latest p
   assert.deepEqual(reviewStore.records.at(-1)?.edge_findings, result.edge_findings)
 })
 
-test('dependency graph delta lookup degrades gracefully when history lookup fails', async () => {
+test('projected dependency edge delta lookup degrades gracefully when history lookup fails', async () => {
   const reviewStore = new InMemoryReviewStore()
   reviewStore.failLookup = true
 

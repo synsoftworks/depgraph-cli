@@ -39,7 +39,7 @@ export async function run(argv: string[], overrides: Partial<CliRuntime> = {}): 
 
   program
     .name('depgraph')
-    .description('Graph-first dependency risk analysis for npm packages and dependency trees.')
+    .description('Graph-first dependency risk analysis for npm packages and resolved dependency tree projections.')
     .configureOutput({
       writeOut: (text) => runtime.stdout.write(text),
       writeErr: (text) => runtime.stderr.write(text),
@@ -50,11 +50,11 @@ export async function run(argv: string[], overrides: Partial<CliRuntime> = {}): 
 
   program
     .command('scan')
-    .description('Scan an npm package and dependency graph for suspicious metadata patterns.')
+    .description('Scan an npm package and its current resolved dependency tree projection for suspicious metadata patterns.')
     .argument('<package_spec>', 'Package name with optional version or range, for example lodash@4.17.21')
     .option('--json', 'Emit deterministic JSON output')
     .option('--no-tui', 'Emit deterministic plain text instead of Ink output')
-    .option('--depth <number>', 'Cap how far the graph is traversed', parseDepth, DEFAULT_MAX_DEPTH)
+    .option('--depth <number>', 'Cap how far the resolved dependency tree projection is traversed', parseDepth, DEFAULT_MAX_DEPTH)
     .option(
       '--threshold <number>',
       'Adjust when a node counts as suspicious',
@@ -65,6 +65,10 @@ export async function run(argv: string[], overrides: Partial<CliRuntime> = {}): 
     .addHelpText(
       'after',
       [
+        '',
+        'Notes:',
+        '  v1 scans a resolved dependency tree view from registry metadata.',
+        '  Shared packages may appear under a single path in the current view.',
         '',
         'Examples:',
         '  depgraph scan lodash@4.17.21',
