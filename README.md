@@ -114,9 +114,6 @@ Trimmed example:
   "baseline_record_id": null,
   "requested_depth": 2,
   "threshold": 0.4,
-  "field_reliability": {
-    "adr": "ADR-012"
-  },
   "root": {
     "name": "axios",
     "version": "1.14.0",
