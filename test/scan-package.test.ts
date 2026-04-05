@@ -527,6 +527,7 @@ test('scan use case persists a durable scan review record after the scan complet
     baseline_record_id: null,
     requested_depth: 3,
     threshold: 0.4,
+    field_reliability: createFieldReliabilityReport(),
     raw_score: 0.8,
     risk_level: 'critical',
     signals: [],

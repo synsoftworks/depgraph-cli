@@ -50,6 +50,54 @@ export function renderEvaluationPlainText(summary: EvaluationSummary): string {
   lines.push('', 'Signal frequency by dependents_count coverage:')
   lines.push(...renderCoverageSignals(summary.metadata_coverage.signal_frequency_by_dependents_count))
 
+  lines.push(
+    '',
+    'Field reliability distribution:',
+    `- exact tier counts from ADR-012-ready records: ${summary.field_reliability_distribution.records_with_field_reliability}`,
+    `- records excluded for missing ADR-012 metadata: ${summary.field_reliability_distribution.records_excluded_missing_field_reliability}`,
+    `- reliable: ${summary.field_reliability_distribution.reliable}`,
+    `- conditionally reliable: ${summary.field_reliability_distribution.conditionally_reliable}`,
+    `- unavailable: ${summary.field_reliability_distribution.unavailable}`,
+    `- placeholder: ${summary.field_reliability_distribution.placeholder}`,
+    `- heuristic output: ${summary.field_reliability_distribution.heuristic_output}`,
+    `- structural only: ${summary.field_reliability_distribution.structural_only}`,
+    `- scan context: ${summary.field_reliability_distribution.scan_context}`,
+    '',
+    'Integrity signals:',
+    `- synthetic project roots: ${summary.integrity_signals.synthetic_project_root_count}`,
+    `- unresolved registry lookups: ${summary.integrity_signals.unresolved_registry_lookup_count}`,
+    `- deprecated security signals: ${summary.integrity_signals.deprecated_with_security_signal_count}`,
+    '',
+    'Field readiness issues:',
+    `- dependents_count unavailable: ${summary.field_readiness_issues.dependents_count_unavailable_count}`,
+    `- has_advisories placeholder rows: ${summary.field_readiness_issues.has_advisories_placeholder_count}`,
+    `- records missing ADR-012 metadata: ${summary.field_readiness_issues.records_missing_field_reliability_count}`,
+    '',
+    'Heuristic output presence:',
+    `- rows with risk_score: ${summary.heuristic_output_presence.nodes_with_risk_score}`,
+    `- rows with risk_level: ${summary.heuristic_output_presence.nodes_with_risk_level}`,
+    `- rows with recommendation: ${summary.heuristic_output_presence.nodes_with_recommendation}`,
+    `- rows with signals: ${summary.heuristic_output_presence.nodes_with_signals}`,
+    '',
+    'Export readiness:',
+    `- total package rows: ${summary.export_readiness.total_package_rows}`,
+    `- rows from ADR-012-ready records: ${summary.export_readiness.rows_with_reliability_metadata}`,
+    `- usable rows: ${summary.export_readiness.usable_rows}`,
+    `- excluded rows: ${summary.export_readiness.excluded_rows}`,
+    `- excluded for missing ADR-012 metadata: ${summary.export_readiness.excluded_missing_reliability_metadata}`,
+    `- excluded for package-level reasons: ${summary.export_readiness.package_level_excluded_rows}`,
+    `- excluded missing weekly_downloads: ${summary.export_readiness.excluded_missing_weekly_downloads}`,
+    `- excluded unresolved registry lookup: ${summary.export_readiness.excluded_unresolved_registry_lookup}`,
+    `- excluded placeholder fields: ${summary.export_readiness.excluded_placeholder_fields}`,
+  )
+
+  const warnings = renderReadinessWarnings(summary)
+
+  if (warnings.length > 0) {
+    lines.push('', 'Readiness warnings:')
+    lines.push(...warnings.map((warning) => `- ${warning}`))
+  }
+
   return lines.join('\n')
 }
 
@@ -84,4 +132,22 @@ function formatDerivedFrom(derivedFrom: EvaluationSummary['canonical_labels']['d
     case 'source_precedence_then_latest_within_source':
       return 'source precedence, then latest within source'
   }
+}
+
+function renderReadinessWarnings(summary: EvaluationSummary): string[] {
+  const warnings: string[] = []
+
+  if (summary.integrity_signals.deprecated_with_security_signal_count > 0) {
+    warnings.push(
+      `Known security-related deprecation signals detected: ${summary.integrity_signals.deprecated_with_security_signal_count}`,
+    )
+  }
+
+  if (summary.field_readiness_issues.records_missing_field_reliability_count > 0) {
+    warnings.push(
+      'Some historical scan records predate ADR-012 and were excluded from exact tier-based readiness calculations.',
+    )
+  }
+
+  return warnings
 }

@@ -66,7 +66,7 @@ Append a review outcome to a stored scan finding:
 depgraph review <record_id> --target package_finding:axios@1.14.0 --outcome benign --notes "reviewed by analyst"
 ```
 
-Inspect local dataset coverage:
+Inspect local dataset coverage and readiness:
 
 ```bash
 depgraph eval
@@ -169,12 +169,12 @@ See the roadmap for what's coming.
 
 ### Coming Soon
 
+- [x] depgraph.sh
 - [ ] pnpm and yarn lockfile support
 - [ ] advisory database integration
 - [ ] sensitive import analysis
 - [ ] explain command
 - [ ] CI/CD GitHub Action
-- [ ] depgraph.sh
 
 ### Future
 

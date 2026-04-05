@@ -1,4 +1,6 @@
 import type {
+  FieldReliabilityReport,
+  FieldReliabilityTier,
   PackageNode,
   Recommendation,
   ReviewOutcome,
@@ -128,6 +130,7 @@ export interface ScanReviewRecord {
   baseline_record_id: string | null
   requested_depth: number
   threshold: number
+  field_reliability?: FieldReliabilityReport
   raw_score: number
   risk_level: RiskLevel
   signals: RiskSignal[]
@@ -238,6 +241,49 @@ export interface MetadataCoverageSummary {
   signal_frequency_by_dependents_count: CoverageSignalFrequency
 }
 
+export interface FieldReliabilityDistributionSummary {
+  records_with_field_reliability: number
+  records_excluded_missing_field_reliability: number
+  reliable: number
+  conditionally_reliable: number
+  unavailable: number
+  placeholder: number
+  heuristic_output: number
+  structural_only: number
+  scan_context: number
+}
+
+export interface IntegritySignalsSummary {
+  synthetic_project_root_count: number
+  unresolved_registry_lookup_count: number
+  deprecated_with_security_signal_count: number
+}
+
+export interface FieldReadinessIssuesSummary {
+  dependents_count_unavailable_count: number
+  has_advisories_placeholder_count: number
+  records_missing_field_reliability_count: number
+}
+
+export interface HeuristicOutputPresenceSummary {
+  nodes_with_risk_score: number
+  nodes_with_risk_level: number
+  nodes_with_recommendation: number
+  nodes_with_signals: number
+}
+
+export interface ExportReadinessSummary {
+  total_package_rows: number
+  rows_with_reliability_metadata: number
+  usable_rows: number
+  excluded_rows: number
+  excluded_missing_weekly_downloads: number
+  excluded_unresolved_registry_lookup: number
+  excluded_placeholder_fields: number
+  excluded_missing_reliability_metadata: number
+  package_level_excluded_rows: number
+}
+
 export interface RawReviewEventSummary {
   total_events: number
   malicious_events: number
@@ -273,4 +319,9 @@ export interface EvaluationSummary {
   workflow_status: WorkflowStatusSummary
   signal_frequency: SignalFrequency[]
   metadata_coverage: MetadataCoverageSummary
+  field_reliability_distribution: FieldReliabilityDistributionSummary
+  integrity_signals: IntegritySignalsSummary
+  field_readiness_issues: FieldReadinessIssuesSummary
+  heuristic_output_presence: HeuristicOutputPresenceSummary
+  export_readiness: ExportReadinessSummary
 }

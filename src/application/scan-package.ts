@@ -487,6 +487,7 @@ function buildScanReviewRecord({
     baseline_record_id: baselineRecordId,
     requested_depth: result.requested_depth,
     threshold: result.threshold,
+    field_reliability: result.field_reliability,
     raw_score: result.overall_risk_score,
     risk_level: result.overall_risk_level,
     signals: result.root.signals,
