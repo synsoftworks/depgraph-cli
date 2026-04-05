@@ -3,6 +3,7 @@ import { Box, Text, render, useApp } from 'ink'
 
 import type { EdgeFinding } from '../domain/contracts.js'
 import type { PackageNode, RiskLevel, RiskSignal, ScanFinding, ScanResult } from '../domain/entities.js'
+import { getFieldReliabilityPolicySummary } from './field-reliability-summary.js'
 
 const DIVIDER = '─'.repeat(92)
 const PANEL_WIDTH = 88
@@ -62,6 +63,8 @@ function ScanResultView({ result }: { result: ScanResult }): React.JSX.Element {
         {result.edge_findings.length > 0 ? (
           <ChangedEdgesPanel edgeFindings={result.edge_findings} />
         ) : null}
+
+        <FieldReliabilityPolicyPanel result={result} />
 
         {flattenTree(result.root).map((row) => (
           <React.Fragment key={row.node.key}>
@@ -141,6 +144,31 @@ function ChangedEdgesPanel({ edgeFindings }: { edgeFindings: EdgeFinding[] }): R
             </Text>
             <Text color="gray">{edgeFinding.path.join(' > ')}</Text>
             <Text color="white">{edgeFinding.reason}</Text>
+          </Box>
+        ))}
+      </Box>
+    </Box>
+  )
+}
+
+function FieldReliabilityPolicyPanel({ result }: { result: ScanResult }): React.JSX.Element {
+  const lines = getFieldReliabilityPolicySummary(result)
+
+  return (
+    <Box marginBottom={1}>
+      <Box
+        flexDirection="column"
+        borderStyle="single"
+        borderColor="cyan"
+        paddingX={1}
+        paddingY={0}
+        width={PANEL_WIDTH}
+      >
+        <Text color="gray">{`FIELD RELIABILITY POLICY · ${result.field_reliability.adr}`}</Text>
+        {lines.map((line) => (
+          <Box key={line}>
+            <Text color="cyanBright">{'• '}</Text>
+            <Text color="white">{line}</Text>
           </Box>
         ))}
       </Box>

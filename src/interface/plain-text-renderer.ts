@@ -1,4 +1,5 @@
 import type { PackageNode, ScanResult } from '../domain/entities.js'
+import { getFieldReliabilityPolicySummary } from './field-reliability-summary.js'
 
 export function renderPlainText(result: ScanResult): string {
   const lines = [
@@ -25,6 +26,12 @@ export function renderPlainText(result: ScanResult): string {
       }
     }
   }
+
+  lines.push(
+    '',
+    `Field reliability policy (${result.field_reliability.adr}):`,
+  )
+  lines.push(...getFieldReliabilityPolicySummary(result).map((line) => `- ${line}`))
 
   lines.push(
     '',
