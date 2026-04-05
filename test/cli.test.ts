@@ -4,6 +4,7 @@ import test from 'node:test'
 
 import { run } from '../src/cli/index.js'
 import type { EvaluationSummary, ReviewEvent } from '../src/domain/contracts.js'
+import { createFieldReliabilityReport } from '../src/domain/field-reliability-policy.js'
 import { NetworkFailureError } from '../src/domain/errors.js'
 import type { ScanResult } from '../src/domain/entities.js'
 
@@ -23,6 +24,7 @@ function createResult(suspiciousCount = 0): ScanResult {
     baseline_record_id: null,
     requested_depth: 3,
     threshold: 0.4,
+    field_reliability: createFieldReliabilityReport(),
     root: {
       name: 'root',
       version: '1.0.0',

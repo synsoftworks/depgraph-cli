@@ -10,6 +10,7 @@ import type {
   ReviewEvent,
   ScanReviewRecord,
 } from '../src/domain/contracts.js'
+import { createFieldReliabilityReport } from '../src/domain/field-reliability-policy.js'
 import type { PackageNode } from '../src/domain/entities.js'
 import type {
   PackageLockDependencyTraverser,
@@ -393,6 +394,57 @@ test('threshold changes suspicious classification without changing raw scores', 
   assert.equal(reviewThreshold.root.dependencies[0]?.risk_score, 0.5)
   assert.equal(stricterThreshold.root.dependencies[0]?.risk_score, 0.5)
   assert.deepEqual(reviewThreshold.edge_findings, [])
+})
+
+test('scan result includes ADR-012 field reliability policy for current scan schema', async () => {
+  const reviewStore = new InMemoryReviewStore()
+  const scanPackage = createScanPackageUseCase({
+    registryTraverser: new StubRegistryTraverser(createLinearGraph()),
+    packageLockTraverser: new StubPackageLockTraverser(createLinearGraph()),
+    scorer: new StubScorer({
+      'root@1.0.0': 0.1,
+      'child@1.0.0': 0.8,
+    }),
+    reviewStore,
+    now: () => new Date('2026-04-01T00:00:00.000Z'),
+  })
+
+  const result = await scanPackage({
+    scan_mode: 'registry_package',
+    package_spec: 'root',
+    max_depth: 3,
+    threshold: 0.4,
+    verbose: false,
+  })
+
+  assert.equal(result.field_reliability.adr, 'ADR-012')
+  assert.deepEqual(result.field_reliability, createFieldReliabilityReport())
+  assert.equal(
+    result.field_reliability.fields['package_node.weekly_downloads']?.tier,
+    'conditionally_reliable',
+  )
+  assert.deepEqual(
+    result.field_reliability.fields['package_node.weekly_downloads']?.notes,
+    ['Do not coerce null to 0.', 'Downloads are not a standalone trust signal.'],
+  )
+  assert.equal(
+    result.field_reliability.fields['package_node.dependents_count']?.tier,
+    'unavailable',
+  )
+  assert.equal(
+    result.field_reliability.fields['package_node.has_advisories']?.tier,
+    'placeholder',
+  )
+  assert.equal(result.field_reliability.fields['package_node.risk_level']?.tier, 'heuristic_output')
+  assert.equal(
+    result.field_reliability.fields['scan_result.overall_risk_level']?.tier,
+    'heuristic_output',
+  )
+  assert.equal(result.field_reliability.fields['scan_warning.kind']?.tier, 'scan_context')
+  assert.match(
+    result.field_reliability.fields['scan_warning.kind']?.guidance ?? '',
+    /scan-time incompleteness and provenance metadata/i,
+  )
 })
 
 test('scan use case persists a durable scan review record after the scan completes', async () => {

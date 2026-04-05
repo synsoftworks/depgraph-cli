@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
+import { createFieldReliabilityReport } from '../src/domain/field-reliability-policy.js'
 import type { ScanResult } from '../src/domain/entities.js'
 import { renderPlainText } from '../src/interface/plain-text-renderer.js'
 
@@ -23,6 +24,10 @@ test('plain text renderer surfaces warnings even when unresolved nodes do not pr
   assert.match(output, /Warnings: 1/)
   assert.match(output, /Warnings:/)
   assert.match(output, /@gsap\/simply@3\.13\.0 \[unresolved_registry_lookup\] Registry metadata unavailable/)
+  assert.match(output, /Field reliability policy \(ADR-012\):/)
+  assert.match(output, /weekly_downloads: conditionally reliable/)
+  assert.match(output, /has_advisories: placeholder only/)
+  assert.match(output, /"safe" means below the configured threshold, not verified benign/)
   assert.match(output, /Findings:\n- none/)
   assert.match(output, /@gsap\/simply@3\.13\.0 \[registry metadata unavailable\] \[safe 0\.08\]/)
 })
@@ -35,6 +40,7 @@ function createResult(): ScanResult {
     baseline_record_id: 'baseline-record',
     requested_depth: 3,
     threshold: 0.4,
+    field_reliability: createFieldReliabilityReport(),
     root: {
       name: 'root',
       version: '1.0.0',
@@ -127,6 +133,7 @@ function createUnresolvedNoFindingResult(): ScanResult {
     baseline_record_id: null,
     requested_depth: 3,
     threshold: 0.4,
+    field_reliability: createFieldReliabilityReport(),
     root: {
       name: 'project',
       version: '1.0.0',

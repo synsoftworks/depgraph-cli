@@ -33,6 +33,7 @@ import {
   riskLevelForScore,
   riskScoreForSignals,
 } from '../domain/value-objects.js'
+import { createFieldReliabilityReport } from '../domain/field-reliability-policy.js'
 import {
   createEdgeFindingReviewTarget,
   createPackageFindingReviewTarget,
@@ -178,6 +179,7 @@ export function createScanPackageUseCase({
       baseline_record_id: previousRecord?.record_id ?? null,
       requested_depth: maxDepth,
       threshold,
+      field_reliability: createFieldReliabilityReport(),
       root: rootNode,
       edge_findings: edgeFindings,
       findings,

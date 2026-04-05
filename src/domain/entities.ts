@@ -12,6 +12,25 @@ export type Recommendation = 'install' | 'review' | 'do_not_install'
 export type RiskSignalWeight = 'low' | 'medium' | 'high' | 'critical'
 export type ReviewOutcome = 'malicious' | 'benign' | 'needs_review'
 export type ReviewSource = 'human' | 'auto' | 'external'
+export type FieldReliabilityTier =
+  | 'reliable'
+  | 'conditionally_reliable'
+  | 'unavailable'
+  | 'placeholder'
+  | 'heuristic_output'
+  | 'structural_only'
+  | 'scan_context'
+
+export interface FieldReliabilityEntry {
+  tier: FieldReliabilityTier
+  guidance: string
+  notes?: string[]
+}
+
+export interface FieldReliabilityReport {
+  adr: 'ADR-012'
+  fields: Record<string, FieldReliabilityEntry>
+}
 
 export interface RiskSignal {
   type: string
@@ -72,6 +91,7 @@ export interface ScanResult {
   baseline_record_id: string | null
   requested_depth: number
   threshold: number
+  field_reliability: FieldReliabilityReport
   root: PackageNode
   edge_findings: EdgeFinding[]
   findings: ScanFinding[]
