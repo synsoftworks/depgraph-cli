@@ -177,6 +177,44 @@ function createEvaluationSummary(): EvaluationSummary {
         ],
       },
     },
+    field_reliability_distribution: {
+      records_with_field_reliability: 1,
+      records_excluded_missing_field_reliability: 1,
+      reliable: 15,
+      conditionally_reliable: 1,
+      unavailable: 1,
+      placeholder: 1,
+      heuristic_output: 15,
+      structural_only: 15,
+      scan_context: 17,
+    },
+    integrity_signals: {
+      synthetic_project_root_count: 1,
+      unresolved_registry_lookup_count: 1,
+      deprecated_with_security_signal_count: 1,
+    },
+    field_readiness_issues: {
+      dependents_count_unavailable_count: 4,
+      has_advisories_placeholder_count: 4,
+      records_missing_field_reliability_count: 1,
+    },
+    heuristic_output_presence: {
+      nodes_with_risk_score: 4,
+      nodes_with_risk_level: 4,
+      nodes_with_recommendation: 4,
+      nodes_with_signals: 4,
+    },
+    export_readiness: {
+      total_package_rows: 5,
+      rows_with_reliability_metadata: 3,
+      usable_rows: 0,
+      excluded_rows: 5,
+      excluded_missing_weekly_downloads: 1,
+      excluded_unresolved_registry_lookup: 1,
+      excluded_placeholder_fields: 1,
+      excluded_missing_reliability_metadata: 2,
+      package_level_excluded_rows: 3,
+    },
   }
 }
 

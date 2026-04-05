@@ -3,6 +3,7 @@ import test from 'node:test'
 
 import { createEvaluateScansUseCase } from '../src/application/evaluate-scans.js'
 import { createResolveReviewStateIndexUseCase } from '../src/application/resolve-review-state-index.js'
+import { createFieldReliabilityReport } from '../src/domain/field-reliability-policy.js'
 import type { ReviewEvent, ScanReviewRecord } from '../src/domain/contracts.js'
 import type { ScanReviewStore } from '../src/domain/ports.js'
 
@@ -80,11 +81,153 @@ test('evaluate scans reports metadata coverage and latest-label counts', async (
   assert.deepEqual(summary.metadata_coverage.signal_frequency_by_weekly_downloads.missing, [
     { type: 'child_signal', count: 1 },
   ])
+  assert.equal(summary.field_reliability_distribution.placeholder, 1)
+  assert.equal(summary.field_reliability_distribution.records_with_field_reliability, 1)
+  assert.equal(
+    summary.field_reliability_distribution.records_excluded_missing_field_reliability,
+    0,
+  )
+  assert.equal(summary.field_readiness_issues.records_missing_field_reliability_count, 0)
+  assert.equal(summary.integrity_signals.synthetic_project_root_count, 0)
+  assert.equal(summary.heuristic_output_presence.nodes_with_risk_score, 2)
+  assert.equal(summary.export_readiness.total_package_rows, 2)
+  assert.equal(summary.export_readiness.rows_with_reliability_metadata, 2)
+  assert.equal(summary.export_readiness.usable_rows, 0)
+  assert.equal(summary.export_readiness.excluded_missing_reliability_metadata, 0)
+  assert.equal(summary.export_readiness.package_level_excluded_rows, 2)
+  assert.equal(summary.export_readiness.excluded_placeholder_fields, 1)
 })
 
-function createRecord(): ScanReviewRecord {
+test('evaluate scans handles mixed historical records and readiness exclusion precedence deterministically', async () => {
+  const reviewStore = new InMemoryReviewStore(
+    [
+      createRecord({
+        recordId: 'record-policy',
+        includeFieldReliability: true,
+        rootOverrides: {
+          is_project_root: true,
+          metadata_status: 'synthetic_project_root',
+          age_days: null,
+          weekly_downloads: null,
+          dependents_count: null,
+          published_at: null,
+          first_published: null,
+          last_published: null,
+          total_versions: null,
+          publish_events_last_30_days: null,
+        },
+        childOverrides: {
+          metadata_status: 'unresolved_registry_lookup',
+          metadata_warning: 'Registry metadata unavailable',
+          weekly_downloads: null,
+          deprecated_message:
+            'This package has a critical vulnerability. See CVE-2026-1234 for details.',
+        },
+        warnings: [
+          {
+            kind: 'unresolved_registry_lookup',
+            package_key: 'child@1.0.0',
+            package_name: 'child',
+            package_version: '1.0.0',
+            message: 'Registry metadata unavailable',
+            lockfile_resolved_url: null,
+            lockfile_integrity: null,
+          },
+        ],
+      }),
+      createRecord({
+        recordId: 'record-legacy',
+        includeFieldReliability: false,
+      }),
+    ],
+    [],
+  )
+  const evaluateScans = createEvaluateScansUseCase({
+    scanRecordSource: reviewStore,
+    rawReviewEventSource: reviewStore,
+    resolveReviewStateIndex: createResolveReviewStateIndexUseCase({
+      reviewEventSource: reviewStore,
+    }),
+  })
+
+  const summary = await evaluateScans()
+  const expectedDistribution = countReliabilityTiers(createFieldReliabilityReport())
+  expectedDistribution.records_excluded_missing_field_reliability = 1
+
+  assert.equal(summary.field_readiness_issues.records_missing_field_reliability_count, 1)
+  assert.deepEqual(summary.field_reliability_distribution, expectedDistribution)
+  assert.equal(summary.integrity_signals.synthetic_project_root_count, 1)
+  assert.equal(summary.integrity_signals.unresolved_registry_lookup_count, 1)
+  assert.equal(summary.integrity_signals.deprecated_with_security_signal_count, 1)
+  assert.equal(summary.field_readiness_issues.dependents_count_unavailable_count, 1)
+  assert.equal(summary.field_readiness_issues.has_advisories_placeholder_count, 3)
+  assert.equal(summary.heuristic_output_presence.nodes_with_risk_score, 3)
+  assert.equal(summary.heuristic_output_presence.nodes_with_risk_level, 3)
+  assert.equal(summary.heuristic_output_presence.nodes_with_recommendation, 3)
+  assert.equal(summary.heuristic_output_presence.nodes_with_signals, 3)
+  assert.equal(summary.export_readiness.total_package_rows, 4)
+  assert.equal(summary.export_readiness.rows_with_reliability_metadata, 2)
+  assert.equal(summary.export_readiness.usable_rows, 0)
+  assert.equal(summary.export_readiness.excluded_rows, 4)
+  assert.equal(summary.export_readiness.excluded_missing_reliability_metadata, 2)
+  assert.equal(summary.export_readiness.package_level_excluded_rows, 2)
+  assert.equal(summary.export_readiness.excluded_unresolved_registry_lookup, 1)
+  assert.equal(summary.export_readiness.excluded_missing_weekly_downloads, 0)
+  assert.equal(summary.export_readiness.excluded_placeholder_fields, 0)
+})
+
+function createRecord({
+  recordId = 'record-1',
+  includeFieldReliability = true,
+  rootOverrides = {},
+  childOverrides = {},
+  warnings = [],
+}: {
+  recordId?: string
+  includeFieldReliability?: boolean
+  rootOverrides?: Partial<ScanReviewRecord['root']>
+  childOverrides?: Partial<ScanReviewRecord['root']['dependencies'][number]>
+  warnings?: ScanReviewRecord['warnings']
+} = {}): ScanReviewRecord {
+  const childNode: ScanReviewRecord['root']['dependencies'][number] = {
+    name: 'child',
+    version: '1.0.0',
+    key: 'child@1.0.0',
+    depth: 1,
+    is_project_root: false,
+    metadata_status: 'enriched',
+    metadata_warning: null,
+    lockfile_resolved_url: null,
+    lockfile_integrity: null,
+    age_days: 1,
+    weekly_downloads: null,
+    dependents_count: 42,
+    deprecated_message: null,
+    is_security_tombstone: false,
+    published_at: '2026-04-01T00:00:00.000Z',
+    first_published: '2026-04-01T00:00:00.000Z',
+    last_published: '2026-04-01T00:00:00.000Z',
+    total_versions: 1,
+    dependency_count: 0,
+    publish_events_last_30_days: 1,
+    has_advisories: false,
+    risk_score: 0.16,
+    risk_level: 'safe',
+    signals: [
+      {
+        type: 'child_signal',
+        value: 1,
+        weight: 'medium',
+        reason: 'child signal',
+      },
+    ],
+    recommendation: 'install',
+    dependencies: [],
+    ...childOverrides,
+  }
+
   return {
-    record_id: 'record-1',
+    record_id: recordId,
     created_at: '2026-04-01T00:00:00.000Z',
     scan_mode: 'registry_package',
     package: { name: 'root', version: '1.0.0' },
@@ -100,6 +243,7 @@ function createRecord(): ScanReviewRecord {
     baseline_record_id: null,
     requested_depth: 3,
     threshold: 0.4,
+    ...(includeFieldReliability ? { field_reliability: createFieldReliabilityReport() } : {}),
     raw_score: 0.48,
     risk_level: 'review',
     signals: [
@@ -173,43 +317,8 @@ function createRecord(): ScanReviewRecord {
         },
       ],
       recommendation: 'review',
-      dependencies: [
-        {
-          name: 'child',
-          version: '1.0.0',
-          key: 'child@1.0.0',
-          depth: 1,
-          is_project_root: false,
-          metadata_status: 'enriched',
-          metadata_warning: null,
-          lockfile_resolved_url: null,
-          lockfile_integrity: null,
-          age_days: 1,
-          weekly_downloads: null,
-          dependents_count: 42,
-          deprecated_message: null,
-          is_security_tombstone: false,
-          published_at: '2026-04-01T00:00:00.000Z',
-          first_published: '2026-04-01T00:00:00.000Z',
-          last_published: '2026-04-01T00:00:00.000Z',
-          total_versions: 1,
-          dependency_count: 0,
-          publish_events_last_30_days: 1,
-          has_advisories: false,
-          risk_score: 0.16,
-          risk_level: 'safe',
-          signals: [
-            {
-              type: 'child_signal',
-              value: 1,
-              weight: 'medium',
-              reason: 'child signal',
-            },
-          ],
-          recommendation: 'install',
-          dependencies: [],
-        },
-      ],
+      dependencies: [childNode],
+      ...rootOverrides,
     },
     total_scanned: 2,
     suspicious_count: 1,
@@ -217,7 +326,7 @@ function createRecord(): ScanReviewRecord {
     scan_duration_ms: 1,
     dependency_edges: [{ from: 'root@1.0.0', to: 'child@1.0.0', child_depth: 1 }],
     edge_findings: [],
-    warnings: [],
+    warnings,
   }
 }
 
@@ -282,4 +391,36 @@ function createReviewEvent(outcome: ReviewEvent['outcome'], createdAt: string): 
     review_source: 'human',
     confidence: 0.9,
   }
+}
+
+function countReliabilityTiers(
+  report: ReturnType<typeof createFieldReliabilityReport>,
+): {
+  records_with_field_reliability: number
+  records_excluded_missing_field_reliability: number
+  reliable: number
+  conditionally_reliable: number
+  unavailable: number
+  placeholder: number
+  heuristic_output: number
+  structural_only: number
+  scan_context: number
+} {
+  const counts = {
+    records_with_field_reliability: 1,
+    records_excluded_missing_field_reliability: 0,
+    reliable: 0,
+    conditionally_reliable: 0,
+    unavailable: 0,
+    placeholder: 0,
+    heuristic_output: 0,
+    structural_only: 0,
+    scan_context: 0,
+  }
+
+  for (const entry of Object.values(report.fields)) {
+    counts[entry.tier] += 1
+  }
+
+  return counts
 }

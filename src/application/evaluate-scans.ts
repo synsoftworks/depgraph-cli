@@ -1,13 +1,10 @@
 import type {
-  CoverageSignalFrequency,
   EvaluationSummary,
-  MetadataCoverageSummary,
   ResolvedReviewTargetState,
   ReviewTarget,
-  SignalFrequency,
 } from '../domain/contracts.js'
-import type { PackageNode, RiskSignal } from '../domain/entities.js'
 import type { ScanReviewStore } from '../domain/ports.js'
+import { buildEvaluationDatasetSummary } from './evaluation-readiness.js'
 import { getResolvedReviewState } from './resolve-review-state.js'
 
 interface EvaluateScansDependencies {
@@ -28,14 +25,6 @@ export function createEvaluateScansUseCase({
       resolveReviewStateIndex(),
     ])
 
-    const signalCounts = new Map<string, number>()
-    const knownDownloadsSignalCounts = new Map<string, number>()
-    const missingDownloadsSignalCounts = new Map<string, number>()
-    const knownDependentsSignalCounts = new Map<string, number>()
-    const missingDependentsSignalCounts = new Map<string, number>()
-    let totalNodes = 0
-    let nodesMissingWeeklyDownloads = 0
-    let nodesMissingDependentsCount = 0
     let totalTargets = 0
     let packageFindingTargets = 0
     let edgeFindingTargets = 0
@@ -66,27 +55,6 @@ export function createEvaluateScansUseCase({
     }
 
     for (const record of scanRecords) {
-      // This is feature-surface observability for the dataset, not a quality metric.
-      for (const node of flattenMetadataNodes(record.root)) {
-        totalNodes += 1
-
-        if (node.weekly_downloads === null) {
-          nodesMissingWeeklyDownloads += 1
-          collectSignals(node.signals, missingDownloadsSignalCounts)
-        } else {
-          collectSignals(node.signals, knownDownloadsSignalCounts)
-        }
-
-        if (node.dependents_count === null) {
-          nodesMissingDependentsCount += 1
-          collectSignals(node.signals, missingDependentsSignalCounts)
-        } else {
-          collectSignals(node.signals, knownDependentsSignalCounts)
-        }
-
-        collectSignals(node.signals, signalCounts)
-      }
-
       for (const reviewTarget of listReviewTargets(record)) {
         totalTargets += 1
 
@@ -121,6 +89,8 @@ export function createEvaluateScansUseCase({
       }
     }
 
+    const datasetSummary = buildEvaluationDatasetSummary(scanRecords)
+
     return {
       total_scans: scanRecords.length,
       review_targets: {
@@ -146,16 +116,13 @@ export function createEvaluateScansUseCase({
         needs_review_targets: needsReviewTargets,
         resolved_targets: resolvedTargets,
       },
-      signal_frequency: toSortedSignalFrequency(signalCounts),
-      metadata_coverage: buildMetadataCoverageSummary({
-        totalNodes,
-        nodesMissingWeeklyDownloads,
-        nodesMissingDependentsCount,
-        knownDownloadsSignalCounts,
-        missingDownloadsSignalCounts,
-        knownDependentsSignalCounts,
-        missingDependentsSignalCounts,
-      }),
+      signal_frequency: datasetSummary.signal_frequency,
+      metadata_coverage: datasetSummary.metadata_coverage,
+      field_reliability_distribution: datasetSummary.field_reliability_distribution,
+      integrity_signals: datasetSummary.integrity_signals,
+      field_readiness_issues: datasetSummary.field_readiness_issues,
+      heuristic_output_presence: datasetSummary.heuristic_output_presence,
+      export_readiness: datasetSummary.export_readiness,
     }
   }
 }
@@ -165,89 +132,4 @@ function listReviewTargets(record: Awaited<ReturnType<ScanReviewStore['listScanR
     ...record.findings.map((finding) => finding.review_target),
     ...record.edge_findings.map((edgeFinding) => edgeFinding.review_target),
   ]
-}
-
-function flattenMetadataNodes(root: PackageNode): PackageNode[] {
-  const descendants = root.dependencies.flatMap(flattenMetadataNodes)
-
-  if (root.is_project_root) {
-    return descendants
-  }
-
-  return [root, ...descendants]
-}
-
-function collectSignals(signals: RiskSignal[], counts: Map<string, number>): void {
-  for (const signal of signals) {
-    counts.set(signal.type, (counts.get(signal.type) ?? 0) + 1)
-  }
-}
-
-function toSortedSignalFrequency(signalCounts: Map<string, number>): SignalFrequency[] {
-  return Array.from(signalCounts.entries())
-    .map(([type, count]) => ({ type, count }))
-    .sort((left, right) => {
-      if (left.count !== right.count) {
-        return right.count - left.count
-      }
-
-      return left.type.localeCompare(right.type)
-    })
-}
-
-function buildMetadataCoverageSummary({
-  totalNodes,
-  nodesMissingWeeklyDownloads,
-  nodesMissingDependentsCount,
-  knownDownloadsSignalCounts,
-  missingDownloadsSignalCounts,
-  knownDependentsSignalCounts,
-  missingDependentsSignalCounts,
-}: {
-  totalNodes: number
-  nodesMissingWeeklyDownloads: number
-  nodesMissingDependentsCount: number
-  knownDownloadsSignalCounts: Map<string, number>
-  missingDownloadsSignalCounts: Map<string, number>
-  knownDependentsSignalCounts: Map<string, number>
-  missingDependentsSignalCounts: Map<string, number>
-}): MetadataCoverageSummary {
-  return {
-    weekly_downloads: {
-      total_nodes: totalNodes,
-      missing_count: nodesMissingWeeklyDownloads,
-      missing_percent: percentage(nodesMissingWeeklyDownloads, totalNodes),
-    },
-    dependents_count: {
-      total_nodes: totalNodes,
-      missing_count: nodesMissingDependentsCount,
-      missing_percent: percentage(nodesMissingDependentsCount, totalNodes),
-    },
-    signal_frequency_by_weekly_downloads: toCoverageSignalFrequency(
-      knownDownloadsSignalCounts,
-      missingDownloadsSignalCounts,
-    ),
-    signal_frequency_by_dependents_count: toCoverageSignalFrequency(
-      knownDependentsSignalCounts,
-      missingDependentsSignalCounts,
-    ),
-  }
-}
-
-function toCoverageSignalFrequency(
-  knownCounts: Map<string, number>,
-  missingCounts: Map<string, number>,
-): CoverageSignalFrequency {
-  return {
-    known: toSortedSignalFrequency(knownCounts),
-    missing: toSortedSignalFrequency(missingCounts),
-  }
-}
-
-function percentage(part: number, total: number): number {
-  if (total === 0) {
-    return 0
-  }
-
-  return Number(((part / total) * 100).toFixed(2))
 }
