@@ -160,7 +160,7 @@ See the roadmap for what's coming.
 
 ### Shipped
 
-- [x] npm package scanning with BFS traversal
+- [x] npm package scanning with traversal
 - [x] rich Ink terminal UI and plain text mode
 - [x] deterministic JSON output for agents and CI
 - [x] local scan persistence and append-only review history
@@ -170,10 +170,10 @@ See the roadmap for what's coming.
 - [x] graceful degradation for private and non-registry dependencies
 - [x] finding-level review targets and source-precedence label integrity
 - [x] local dataset evaluation
+- [x] depgraph.sh
 
 ### Coming Soon
 
-- [x] depgraph.sh
 - [ ] yarn lockfile support
 - [ ] advisory database integration
 - [ ] sensitive import analysis
