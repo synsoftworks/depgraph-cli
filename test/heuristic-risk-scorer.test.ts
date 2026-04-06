@@ -104,3 +104,60 @@ test('heuristic scorer treats security tombstones as critical regardless of inhe
   assert.ok(result.signals.some((signal) => signal.type === 'security_tombstone'))
   assert.ok(!result.signals.some((signal) => signal.type === 'low_weekly_downloads'))
 })
+
+test('heuristic scorer escalates deprecations with security language to review', () => {
+  const scorer = new HeuristicRiskScorer(() => NOW)
+  const metadata = createMetadata({
+    package: {
+      name: 'next',
+      version: '15.1.7',
+    },
+    published_at: '2024-01-01T00:00:00.000Z',
+    first_published_at: '2024-01-01T00:00:00.000Z',
+    last_published_at: '2026-03-31T00:00:00.000Z',
+    total_versions: 50,
+    weekly_downloads: 1_000_000,
+    publish_events_last_30_days: 0,
+    deprecated_message:
+      'This version has a security vulnerability. Please upgrade. See CVE-2025-66478.',
+  })
+
+  const result = scorer.assessPackage(metadata, {
+    depth: 0,
+    path: {
+      packages: [{ name: 'next', version: '15.1.7' }],
+    },
+    dependency_count: 0,
+  })
+
+  assert.equal(result.risk_level, 'review')
+  assert.ok(result.risk_score >= 0.4)
+  assert.ok(result.signals.some((signal) => signal.type === 'deprecated_package'))
+  assert.ok(result.signals.some((signal) => signal.type === 'security_deprecation_language'))
+})
+
+test('heuristic scorer does not escalate routine deprecations without security language', () => {
+  const scorer = new HeuristicRiskScorer(() => NOW)
+  const metadata = createMetadata({
+    published_at: '2024-01-01T00:00:00.000Z',
+    first_published_at: '2024-01-01T00:00:00.000Z',
+    last_published_at: '2026-03-31T00:00:00.000Z',
+    total_versions: 50,
+    weekly_downloads: 1_000_000,
+    publish_events_last_30_days: 0,
+    deprecated_message: 'Package renamed to example-next. Please migrate.',
+  })
+
+  const result = scorer.assessPackage(metadata, {
+    depth: 0,
+    path: {
+      packages: [{ name: 'risky-package', version: '1.0.0' }],
+    },
+    dependency_count: 0,
+  })
+
+  assert.equal(result.risk_level, 'safe')
+  assert.equal(result.risk_score, 0.16)
+  assert.ok(result.signals.some((signal) => signal.type === 'deprecated_package'))
+  assert.ok(!result.signals.some((signal) => signal.type === 'security_deprecation_language'))
+})

@@ -6,6 +6,7 @@ import { InvalidUsageError } from './errors.js'
 
 export const DEFAULT_MAX_DEPTH = 3
 export const DEFAULT_THRESHOLD = 0.4
+export const SECURITY_DEPRECATION_KEYWORDS = ['security', 'vulnerability', 'cve'] as const
 export const RISK_SIGNAL_WEIGHTS = {
   low: 0.08,
   medium: 0.16,
@@ -179,4 +180,14 @@ export function recommendationForRiskLevel(level: RiskLevel): Recommendation {
     default:
       return 'install'
   }
+}
+
+export function hasSecurityDeprecationLanguage(message: string | null): boolean {
+  if (message === null) {
+    return false
+  }
+
+  const normalizedMessage = message.toLowerCase()
+
+  return SECURITY_DEPRECATION_KEYWORDS.some((keyword) => normalizedMessage.includes(keyword))
 }
