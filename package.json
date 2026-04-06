@@ -40,6 +40,7 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "benchmark": "node dist/benchmark/index.js",
     "dev": "tsx src/cli/index.ts",
     "test": "node --import tsx --test",
     "test:smoke": "node --import tsx --test test/json-renderer.test.ts test/review-renderer.test.ts test/evaluation-renderer.test.ts test/integrated-scenarios.test.ts",
