@@ -296,6 +296,12 @@ export interface ExportReadinessSummary {
   rows_excluded_placeholder_fields: number
   rows_excluded_unavailable_fields: number
   rows_excluded_package_level: number
+  rows_blocking_reasons: {
+    missing_field_reliability: number
+    placeholder_fields: number
+    unavailable_fields: number
+    package_level: number
+  }
 }
 
 export interface RawReviewEventSummary {

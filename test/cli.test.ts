@@ -229,6 +229,12 @@ function createEvaluationSummary(): EvaluationSummary {
       rows_excluded_placeholder_fields: 1,
       rows_excluded_unavailable_fields: 0,
       rows_excluded_package_level: 2,
+      rows_blocking_reasons: {
+        missing_field_reliability: 2,
+        placeholder_fields: 1,
+        unavailable_fields: 3,
+        package_level: 2,
+      },
     },
   }
 }

@@ -31,6 +31,11 @@ test('evaluation renderer surfaces raw events and derived canonical labels', () 
   assert.match(plainText, /rows excluded for placeholder fields: 1/)
   assert.match(plainText, /rows excluded for unavailable fields: 0/)
   assert.match(plainText, /rows excluded for package-level reasons: 1/)
+  assert.match(plainText, /blocking reasons present across rows are non-exclusive/)
+  assert.match(plainText, /rows with missing ADR-012 metadata blocker: 2/)
+  assert.match(plainText, /rows with placeholder field blocker: 1/)
+  assert.match(plainText, /rows with unavailable field blocker: 3/)
+  assert.match(plainText, /rows with package-level blocker: 1/)
   assert.match(plainText, /conditionally reliable fields remain eligible only when missingness is preserved explicitly/)
   assert.match(plainText, /Known security-related deprecation signals detected: 1/)
   assert.match(
@@ -98,6 +103,7 @@ test('evaluation renderer surfaces raw events and derived canonical labels', () 
     'rows_excluded_placeholder_fields',
     'rows_excluded_unavailable_fields',
     'rows_excluded_package_level',
+    'rows_blocking_reasons',
   ])
   assert.deepEqual(parsed, summary)
 })
@@ -188,6 +194,12 @@ function createSummary(): EvaluationSummary {
       rows_excluded_placeholder_fields: 1,
       rows_excluded_unavailable_fields: 0,
       rows_excluded_package_level: 1,
+      rows_blocking_reasons: {
+        missing_field_reliability: 2,
+        placeholder_fields: 1,
+        unavailable_fields: 3,
+        package_level: 1,
+      },
     },
   }
 }

@@ -92,6 +92,11 @@ export function renderEvaluationPlainText(summary: EvaluationSummary): string {
     `- rows excluded for placeholder fields: ${summary.export_readiness.rows_excluded_placeholder_fields}`,
     `- rows excluded for unavailable fields: ${summary.export_readiness.rows_excluded_unavailable_fields}`,
     `- rows excluded for package-level reasons: ${summary.export_readiness.rows_excluded_package_level}`,
+    '- blocking reasons present across rows are non-exclusive',
+    `- rows with missing ADR-012 metadata blocker: ${summary.export_readiness.rows_blocking_reasons.missing_field_reliability}`,
+    `- rows with placeholder field blocker: ${summary.export_readiness.rows_blocking_reasons.placeholder_fields}`,
+    `- rows with unavailable field blocker: ${summary.export_readiness.rows_blocking_reasons.unavailable_fields}`,
+    `- rows with package-level blocker: ${summary.export_readiness.rows_blocking_reasons.package_level}`,
     '- conditionally reliable fields remain eligible only when missingness is preserved explicitly',
   )
 

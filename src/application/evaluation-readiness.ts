@@ -69,6 +69,10 @@ export function buildEvaluationDatasetSummary(scanRecords: ScanReviewRecord[]): 
   let excludedUnavailableFields = 0
   let excludedMissingReliabilityMetadata = 0
   let excludedPackageLevel = 0
+  let blockingMissingReliabilityMetadata = 0
+  let blockingPlaceholderFields = 0
+  let blockingUnavailableFields = 0
+  let blockingPackageLevel = 0
 
   for (const record of scanRecords) {
     recordsTotal += 1
@@ -118,12 +122,33 @@ export function buildEvaluationDatasetSummary(scanRecords: ScanReviewRecord[]): 
         deprecatedWithSecuritySignalCount += 1
       }
 
-      switch (determineExportExclusionReason({
+      const blockingReasons = determineExportBlockingReasons({
         node,
         recordHasFieldReliability,
         hasPlaceholderPackageNodeFields,
         hasUnavailablePackageNodeFields,
-      })) {
+      })
+
+      if (blockingReasons.has('missing_field_reliability_metadata')) {
+        blockingMissingReliabilityMetadata += 1
+      }
+
+      if (blockingReasons.has('placeholder_field_dependency')) {
+        blockingPlaceholderFields += 1
+      }
+
+      if (blockingReasons.has('unavailable_field_dependency')) {
+        blockingUnavailableFields += 1
+      }
+
+      if (
+        blockingReasons.has('synthetic_project_root') ||
+        blockingReasons.has('unresolved_registry_lookup')
+      ) {
+        blockingPackageLevel += 1
+      }
+
+      switch (determinePrimaryExportExclusionReason(blockingReasons)) {
         case undefined:
           exportReadyRows += 1
           recordHasExportReadyRows = true
@@ -257,6 +282,12 @@ export function buildEvaluationDatasetSummary(scanRecords: ScanReviewRecord[]): 
       rows_excluded_placeholder_fields: excludedPlaceholderFields,
       rows_excluded_unavailable_fields: excludedUnavailableFields,
       rows_excluded_package_level: excludedPackageLevel,
+      rows_blocking_reasons: {
+        missing_field_reliability: blockingMissingReliabilityMetadata,
+        placeholder_fields: blockingPlaceholderFields,
+        unavailable_fields: blockingUnavailableFields,
+        package_level: blockingPackageLevel,
+      },
     },
   }
 }
@@ -265,7 +296,7 @@ export function isSecurityRelatedDeprecationMessage(message: string): boolean {
   return SECURITY_DEPRECATION_PATTERNS.some((pattern) => pattern.test(message))
 }
 
-function determineExportExclusionReason({
+function determineExportBlockingReasons({
   node,
   recordHasFieldReliability,
   hasPlaceholderPackageNodeFields,
@@ -275,34 +306,48 @@ function determineExportExclusionReason({
   recordHasFieldReliability: boolean
   hasPlaceholderPackageNodeFields: boolean
   hasUnavailablePackageNodeFields: boolean
-}): typeof EXPORT_EXCLUSION_ORDER[number] | undefined {
+}): Set<(typeof EXPORT_EXCLUSION_ORDER)[number]> {
+  const reasons = new Set<(typeof EXPORT_EXCLUSION_ORDER)[number]>()
+
   for (const reason of EXPORT_EXCLUSION_ORDER) {
     switch (reason) {
       case 'synthetic_project_root':
         if (node.metadata_status === 'synthetic_project_root') {
-          return reason
+          reasons.add(reason)
         }
         break
       case 'missing_field_reliability_metadata':
         if (!recordHasFieldReliability) {
-          return reason
+          reasons.add(reason)
         }
         break
       case 'unresolved_registry_lookup':
         if (node.metadata_status === 'unresolved_registry_lookup') {
-          return reason
+          reasons.add(reason)
         }
         break
       case 'placeholder_field_dependency':
         if (hasPlaceholderPackageNodeFields) {
-          return reason
+          reasons.add(reason)
         }
         break
       case 'unavailable_field_dependency':
         if (hasUnavailablePackageNodeFields) {
-          return reason
+          reasons.add(reason)
         }
         break
+    }
+  }
+
+  return reasons
+}
+
+function determinePrimaryExportExclusionReason(
+  blockingReasons: Set<(typeof EXPORT_EXCLUSION_ORDER)[number]>,
+): typeof EXPORT_EXCLUSION_ORDER[number] | undefined {
+  for (const reason of EXPORT_EXCLUSION_ORDER) {
+    if (blockingReasons.has(reason)) {
+      return reason
     }
   }
 
