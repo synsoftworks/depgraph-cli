@@ -3,6 +3,7 @@ import type { RiskSignal } from '../domain/entities.js'
 import type { RiskScorer, RiskScorerContext } from '../domain/ports.js'
 import {
   calculateAgeDays,
+  hasSecurityDeprecationLanguage,
   recommendationForRiskLevel,
   riskScoreForSignals,
   riskLevelForScore,
@@ -67,6 +68,15 @@ export class HeuristicRiskScorer implements RiskScorer {
         value: metadata.deprecated_message,
         weight: 'medium',
         reason: `package is deprecated: ${metadata.deprecated_message}`,
+      })
+    }
+
+    if (hasSecurityDeprecationLanguage(metadata.deprecated_message)) {
+      signals.push({
+        type: 'security_deprecation_language',
+        value: metadata.deprecated_message,
+        weight: 'high',
+        reason: 'deprecation message contains security-related language',
       })
     }
 
