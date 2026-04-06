@@ -14,6 +14,7 @@ import { createFieldReliabilityReport } from '../src/domain/field-reliability-po
 import type { PackageNode } from '../src/domain/entities.js'
 import type {
   PackageLockDependencyTraverser,
+  PnpmLockDependencyTraverser,
   RegistryDependencyTraverser,
   RiskScorer,
   ScanReviewStore,
@@ -40,6 +41,18 @@ class StubRegistryTraverser implements RegistryDependencyTraverser {
 }
 
 class StubPackageLockTraverser implements PackageLockDependencyTraverser {
+  private readonly graph: TraversedDependencyGraph
+
+  constructor(graph: TestTraversedDependencyGraph) {
+    this.graph = normalizeGraph(graph)
+  }
+
+  async traverse(): Promise<TraversedDependencyGraph> {
+    return this.graph
+  }
+}
+
+class StubPnpmLockTraverser implements PnpmLockDependencyTraverser {
   private readonly graph: TraversedDependencyGraph
 
   constructor(graph: TestTraversedDependencyGraph) {
@@ -927,6 +940,47 @@ test('package_lock scans persist their scan_mode and do not diff against registr
   assert.deepEqual(result.edge_findings, [])
   assert.equal(reviewStore.records.at(-1)?.scan_mode, 'package_lock')
   assert.equal(reviewStore.records.at(-1)?.baseline_identity.scan_mode, 'package_lock')
+})
+
+test('pnpm_lock scans persist their scan_mode and do not diff against package_lock history', async () => {
+  const reviewStore = new InMemoryReviewStore([
+    createStoredRecord({
+      dependencyEdges: [{ from: 'root@1.0.0', to: 'child@1.0.0', child_depth: 1 }],
+      scanMode: 'package_lock',
+      workspaceIdentity: '/tmp/workspace/packages/app',
+    }),
+  ])
+  const scanPackage = createScanPackageUseCase({
+    registryTraverser: new StubRegistryTraverser(createLinearGraph()),
+    packageLockTraverser: new StubPackageLockTraverser(createLinearGraph()),
+    pnpmLockTraverser: new StubPnpmLockTraverser(createLinearGraph()),
+    scorer: new StubScorer({
+      'root@1.0.0': 0.1,
+      'child@1.0.0': 0,
+    }),
+    reviewStore,
+    now: () => new Date('2026-04-01T00:00:00.000Z'),
+  })
+
+  const result = await scanPackage({
+    scan_mode: 'pnpm_lock',
+    pnpm_lock_path: '/tmp/workspace/pnpm-lock.yaml',
+    project_root: '/tmp/workspace/packages/app',
+    max_depth: 3,
+    threshold: 0.4,
+    verbose: false,
+    workspace_identity: '/tmp/workspace/packages/app',
+  })
+
+  assert.equal(result.scan_mode, 'pnpm_lock')
+  assert.equal(result.baseline_record_id, null)
+  assert.deepEqual(result.edge_findings, [])
+  assert.equal(reviewStore.records.at(-1)?.scan_mode, 'pnpm_lock')
+  assert.equal(reviewStore.records.at(-1)?.baseline_identity.scan_mode, 'pnpm_lock')
+  assert.equal(
+    reviewStore.records.at(-1)?.baseline_identity.workspace_identity,
+    '/tmp/workspace/packages/app',
+  )
 })
 
 test('package_lock scans keep synthetic project-root metadata explicit and persist enriched dependency metadata consistently', async () => {

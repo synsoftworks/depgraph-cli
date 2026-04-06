@@ -45,6 +45,12 @@ export interface PackageLockDependencyTraverser {
   traverse(package_lock_path: string, max_depth: number): Promise<TraversedDependencyGraph>
 }
 
+export interface PnpmLockDependencyTraverser {
+  // v1 pnpm scanning reads resolved dependency structure from pnpm-lock.yaml itself.
+  // It currently supports importer-scoped project scans backed by a packages snapshot map.
+  traverse(pnpm_lock_path: string, project_root: string, max_depth: number): Promise<TraversedDependencyGraph>
+}
+
 export interface RiskScorerContext {
   depth: number
   path: DependencyPath
