@@ -23,9 +23,15 @@ test('evaluation renderer surfaces raw events and derived canonical labels', () 
   assert.match(plainText, /Field readiness issues:/)
   assert.match(plainText, /Heuristic output presence:/)
   assert.match(plainText, /Export readiness:/)
+  assert.match(plainText, /exact export-ready counts are based only on ADR-012-ready records/)
+  assert.match(plainText, /records total: 3/)
+  assert.match(plainText, /records with ADR-012 metadata: 1/)
   assert.match(plainText, /rows from ADR-012-ready records: 2/)
-  assert.match(plainText, /excluded for missing ADR-012 metadata: 2/)
-  assert.match(plainText, /excluded for package-level reasons: 2/)
+  assert.match(plainText, /rows excluded for missing ADR-012 metadata: 2/)
+  assert.match(plainText, /rows excluded for placeholder fields: 1/)
+  assert.match(plainText, /rows excluded for unavailable fields: 0/)
+  assert.match(plainText, /rows excluded for package-level reasons: 1/)
+  assert.match(plainText, /conditionally reliable fields remain eligible only when missingness is preserved explicitly/)
   assert.match(plainText, /Known security-related deprecation signals detected: 1/)
   assert.match(
     plainText,
@@ -79,6 +85,19 @@ test('evaluation renderer surfaces raw events and derived canonical labels', () 
     'heuristic_output',
     'structural_only',
     'scan_context',
+  ])
+  assert.deepEqual(Object.keys(parsed.export_readiness), [
+    'records_total',
+    'records_with_field_reliability',
+    'records_export_ready',
+    'records_excluded_missing_field_reliability',
+    'rows_total',
+    'rows_with_reliability_metadata',
+    'rows_export_ready',
+    'rows_excluded_missing_field_reliability',
+    'rows_excluded_placeholder_fields',
+    'rows_excluded_unavailable_fields',
+    'rows_excluded_package_level',
   ])
   assert.deepEqual(parsed, summary)
 })
@@ -158,15 +177,17 @@ function createSummary(): EvaluationSummary {
       nodes_with_signals: 3,
     },
     export_readiness: {
-      total_package_rows: 4,
+      records_total: 3,
+      records_with_field_reliability: 1,
+      records_export_ready: 0,
+      records_excluded_missing_field_reliability: 2,
+      rows_total: 4,
       rows_with_reliability_metadata: 2,
-      usable_rows: 0,
-      excluded_rows: 4,
-      excluded_missing_weekly_downloads: 0,
-      excluded_unresolved_registry_lookup: 1,
-      excluded_placeholder_fields: 0,
-      excluded_missing_reliability_metadata: 2,
-      package_level_excluded_rows: 2,
+      rows_export_ready: 0,
+      rows_excluded_missing_field_reliability: 2,
+      rows_excluded_placeholder_fields: 1,
+      rows_excluded_unavailable_fields: 0,
+      rows_excluded_package_level: 1,
     },
   }
 }
