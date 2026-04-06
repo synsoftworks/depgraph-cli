@@ -17,6 +17,14 @@ Run the CLI locally:
 pnpm run dev -- scan axios --no-tui --depth 2
 ```
 
+## Benchmark Runner
+
+The benchmark runner reads from `.internal/benchmarks/benchmark-manifest.json`.
+This file is not tracked in the repository.
+
+To run benchmarks, create `.internal/benchmarks/benchmark-manifest.json`
+with your benchmark cases. See internal documentation for the schema.
+
 ## Project Rules
 
 - preserve the architecture boundaries in `AGENTS.md`
