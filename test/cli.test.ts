@@ -4,6 +4,7 @@ import test from 'node:test'
 
 import { run } from '../src/cli/index.js'
 import type { EvaluationSummary, ReviewEvent } from '../src/domain/contracts.js'
+import type { FailureSurfacingSummary } from '../src/domain/failure-surfacing.js'
 import { createFieldReliabilityReport } from '../src/domain/field-reliability-policy.js'
 import { NetworkFailureError } from '../src/domain/errors.js'
 import type { ScanResult } from '../src/domain/entities.js'
@@ -230,6 +231,24 @@ function createEvaluationSummary(): EvaluationSummary {
   }
 }
 
+function createFailureSurfacingSummary(): FailureSurfacingSummary {
+  return {
+    total_records_scanned: 2,
+    total_matches: 1,
+    failures: [
+      {
+        package: 'next',
+        version: '15.1.7',
+        failure_class: 'underweighted_signal',
+        status: 'historical_match',
+        record_ids: ['record-1'],
+        reason:
+          'Security-related deprecation language was present, but the package remained below the review threshold in persisted scan history.',
+      },
+    ],
+  }
+}
+
 test('CLI uses plain text renderer for --no-tui and returns suspicious exit code', async () => {
   const stdout = new MemoryStream()
   const stderr = new MemoryStream()
@@ -240,6 +259,7 @@ test('CLI uses plain text renderer for --no-tui and returns suspicious exit code
     scanPackage: async () => createResult(1),
     resolveProjectScan,
     reviewScan: async () => createReviewEvent(),
+    evaluateFailures: async () => createFailureSurfacingSummary(),
     evaluateScans: async () => createEvaluationSummary(),
     renderJson: () => {
       throw new Error('JSON renderer should not be used.')
@@ -250,6 +270,8 @@ test('CLI uses plain text renderer for --no-tui and returns suspicious exit code
     },
     renderReviewJson: () => '',
     renderReviewPlainText: () => '',
+    renderFailureJson: () => '',
+    renderFailurePlainText: () => '',
     renderEvaluationJson: () => '',
     renderEvaluationPlainText: () => '',
     renderInk: async () => {
@@ -275,11 +297,14 @@ test('CLI returns invalid usage exit code for malformed arguments', async () => 
     scanPackage: async () => createResult(),
     resolveProjectScan,
     reviewScan: async () => createReviewEvent(),
+    evaluateFailures: async () => createFailureSurfacingSummary(),
     evaluateScans: async () => createEvaluationSummary(),
     renderJson: () => '',
     renderPlainText: () => '',
     renderReviewJson: () => '',
     renderReviewPlainText: () => '',
+    renderFailureJson: () => '',
+    renderFailurePlainText: () => '',
     renderEvaluationJson: () => '',
     renderEvaluationPlainText: () => '',
     renderInk: async () => {},
@@ -301,11 +326,14 @@ test('CLI maps network failures to exit code 3', async () => {
     },
     resolveProjectScan,
     reviewScan: async () => createReviewEvent(),
+    evaluateFailures: async () => createFailureSurfacingSummary(),
     evaluateScans: async () => createEvaluationSummary(),
     renderJson: () => JSON.stringify(createResult()),
     renderPlainText: () => '',
     renderReviewJson: () => '',
     renderReviewPlainText: () => '',
+    renderFailureJson: () => '',
+    renderFailurePlainText: () => '',
     renderEvaluationJson: () => '',
     renderEvaluationPlainText: () => '',
     renderInk: async () => {},
@@ -339,6 +367,7 @@ test('CLI review command forwards explicit target ids deterministically', async 
 
       return createReviewEvent()
     },
+    evaluateFailures: async () => createFailureSurfacingSummary(),
     evaluateScans: async () => createEvaluationSummary(),
     renderJson: () => '',
     renderPlainText: () => '',
@@ -346,6 +375,8 @@ test('CLI review command forwards explicit target ids deterministically', async 
       throw new Error('Review JSON renderer should not be used.')
     },
     renderReviewPlainText: () => 'review output',
+    renderFailureJson: () => '',
+    renderFailurePlainText: () => '',
     renderEvaluationJson: () => '',
     renderEvaluationPlainText: () => '',
     renderInk: async () => {},
@@ -382,11 +413,14 @@ test('CLI scan forwards explicit package-lock scans as package_lock mode', async
     },
     resolveProjectScan,
     reviewScan: async () => createReviewEvent(),
+    evaluateFailures: async () => createFailureSurfacingSummary(),
     evaluateScans: async () => createEvaluationSummary(),
     renderJson: () => JSON.stringify(createResult()),
     renderPlainText: () => '',
     renderReviewJson: () => '',
     renderReviewPlainText: () => '',
+    renderFailureJson: () => '',
+    renderFailurePlainText: () => '',
     renderEvaluationJson: () => '',
     renderEvaluationPlainText: () => '',
     renderInk: async () => {},
@@ -435,11 +469,14 @@ test('CLI scan resolves --project through project detection before scanning', as
       }
     },
     reviewScan: async () => createReviewEvent(),
+    evaluateFailures: async () => createFailureSurfacingSummary(),
     evaluateScans: async () => createEvaluationSummary(),
     renderJson: () => '',
     renderPlainText: () => 'plain text output',
     renderReviewJson: () => '',
     renderReviewPlainText: () => '',
+    renderFailureJson: () => '',
+    renderFailurePlainText: () => '',
     renderEvaluationJson: () => '',
     renderEvaluationPlainText: () => '',
     renderInk: async () => {},
@@ -477,11 +514,14 @@ test('CLI scan forwards explicit pnpm-lock scans as pnpm_lock mode', async () =>
     },
     resolveProjectScan,
     reviewScan: async () => createReviewEvent(),
+    evaluateFailures: async () => createFailureSurfacingSummary(),
     evaluateScans: async () => createEvaluationSummary(),
     renderJson: () => JSON.stringify(createResult()),
     renderPlainText: () => '',
     renderReviewJson: () => '',
     renderReviewPlainText: () => '',
+    renderFailureJson: () => '',
+    renderFailurePlainText: () => '',
     renderEvaluationJson: () => '',
     renderEvaluationPlainText: () => '',
     renderInk: async () => {},
@@ -521,11 +561,14 @@ test('CLI scan resolves pnpm projects through project detection before scanning'
       return resolvePnpmProjectScan('/tmp/example-project')
     },
     reviewScan: async () => createReviewEvent(),
+    evaluateFailures: async () => createFailureSurfacingSummary(),
     evaluateScans: async () => createEvaluationSummary(),
     renderJson: () => '',
     renderPlainText: () => 'plain text output',
     renderReviewJson: () => '',
     renderReviewPlainText: () => '',
+    renderFailureJson: () => '',
+    renderFailurePlainText: () => '',
     renderEvaluationJson: () => '',
     renderEvaluationPlainText: () => '',
     renderInk: async () => {},
@@ -550,6 +593,7 @@ test('CLI eval command renders evaluation summaries deterministically', async ()
     scanPackage: async () => createResult(),
     resolveProjectScan,
     reviewScan: async () => createReviewEvent(),
+    evaluateFailures: async () => createFailureSurfacingSummary(),
     evaluateScans: async () => {
       evalCalls += 1
       return createEvaluationSummary()
@@ -558,6 +602,8 @@ test('CLI eval command renders evaluation summaries deterministically', async ()
     renderPlainText: () => '',
     renderReviewJson: () => '',
     renderReviewPlainText: () => '',
+    renderFailureJson: () => '',
+    renderFailurePlainText: () => '',
     renderEvaluationJson: () => '',
     renderEvaluationPlainText: () => 'eval output',
     renderInk: async () => {},
@@ -572,6 +618,74 @@ test('CLI eval command renders evaluation summaries deterministically', async ()
   assert.equal(stderr.buffer, '')
 })
 
+test('CLI eval --failures renders failure surfacing deterministically', async () => {
+  const stdout = new MemoryStream()
+  const stderr = new MemoryStream()
+  let failureCalls = 0
+  let evalCalls = 0
+
+  const exitCode = await run(['eval', '--failures'], {
+    scanPackage: async () => createResult(),
+    resolveProjectScan,
+    reviewScan: async () => createReviewEvent(),
+    evaluateFailures: async () => {
+      failureCalls += 1
+      return createFailureSurfacingSummary()
+    },
+    evaluateScans: async () => {
+      evalCalls += 1
+      return createEvaluationSummary()
+    },
+    renderJson: () => '',
+    renderPlainText: () => '',
+    renderReviewJson: () => '',
+    renderReviewPlainText: () => '',
+    renderFailureJson: () => '',
+    renderFailurePlainText: () => 'failure output',
+    renderEvaluationJson: () => '',
+    renderEvaluationPlainText: () => 'eval output',
+    renderInk: async () => {},
+    stdout,
+    stderr,
+    isTty: true,
+  })
+
+  assert.equal(exitCode, 0)
+  assert.equal(failureCalls, 1)
+  assert.equal(evalCalls, 0)
+  assert.match(stdout.buffer, /failure output/)
+  assert.equal(stderr.buffer, '')
+})
+
+test('CLI eval --json --failures emits failure-only JSON output explicitly', async () => {
+  const stdout = new MemoryStream()
+  const stderr = new MemoryStream()
+
+  const exitCode = await run(['eval', '--json', '--failures'], {
+    scanPackage: async () => createResult(),
+    resolveProjectScan,
+    reviewScan: async () => createReviewEvent(),
+    evaluateFailures: async () => createFailureSurfacingSummary(),
+    evaluateScans: async () => createEvaluationSummary(),
+    renderJson: () => '',
+    renderPlainText: () => '',
+    renderReviewJson: () => '',
+    renderReviewPlainText: () => '',
+    renderFailureJson: (summary) => JSON.stringify(summary),
+    renderFailurePlainText: () => '',
+    renderEvaluationJson: () => JSON.stringify(createEvaluationSummary()),
+    renderEvaluationPlainText: () => '',
+    renderInk: async () => {},
+    stdout,
+    stderr,
+    isTty: true,
+  })
+
+  assert.equal(exitCode, 0)
+  assert.deepEqual(JSON.parse(stdout.buffer), createFailureSurfacingSummary())
+  assert.equal(stderr.buffer, '')
+})
+
 test('CLI scan help explains the current tree projection semantics', async () => {
   const stdout = new MemoryStream()
   const stderr = new MemoryStream()
@@ -580,11 +694,14 @@ test('CLI scan help explains the current tree projection semantics', async () =>
     scanPackage: async () => createResult(),
     resolveProjectScan,
     reviewScan: async () => createReviewEvent(),
+    evaluateFailures: async () => createFailureSurfacingSummary(),
     evaluateScans: async () => createEvaluationSummary(),
     renderJson: () => '',
     renderPlainText: () => '',
     renderReviewJson: () => '',
     renderReviewPlainText: () => '',
+    renderFailureJson: () => '',
+    renderFailurePlainText: () => '',
     renderEvaluationJson: () => '',
     renderEvaluationPlainText: () => '',
     renderInk: async () => {},

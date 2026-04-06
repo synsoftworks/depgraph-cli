@@ -11,6 +11,7 @@ import type {
   ReviewScanRequest,
   ScanRequest,
 } from '../domain/contracts.js'
+import type { FailureSurfacingSummary } from '../domain/failure-surfacing.js'
 import type { ReviewOutcome, ReviewSource, ScanResult } from '../domain/entities.js'
 import { InvalidUsageError, NetworkFailureError, StorageFailureError } from '../domain/errors.js'
 import { DEFAULT_MAX_DEPTH, DEFAULT_THRESHOLD } from '../domain/value-objects.js'
@@ -24,12 +25,15 @@ export interface CliRuntime {
   resolveProjectScan: (projectPath: string) => Promise<ProjectScanRequest>
   reviewScan: (request: ReviewScanRequest) => Promise<ReviewEvent>
   evaluateScans: () => Promise<EvaluationSummary>
+  evaluateFailures: () => Promise<FailureSurfacingSummary>
   renderJson: (result: ScanResult) => string
   renderPlainText: (result: ScanResult) => string
   renderReviewJson: (event: ReviewEvent) => string
   renderReviewPlainText: (event: ReviewEvent) => string
   renderEvaluationJson: (summary: EvaluationSummary) => string
   renderEvaluationPlainText: (summary: EvaluationSummary) => string
+  renderFailureJson: (summary: FailureSurfacingSummary) => string
+  renderFailurePlainText: (summary: FailureSurfacingSummary) => string
   renderInk: (result: ScanResult) => Promise<void>
   stdout: WritableStreamLike
   stderr: WritableStreamLike
@@ -160,14 +164,25 @@ export async function run(argv: string[], overrides: Partial<CliRuntime> = {}): 
     .command('eval')
     .description('Summarize stored scan and review coverage for the local dataset.')
     .option('--json', 'Emit deterministic JSON output')
+    .option('--failures', 'Surface known failure-pattern matches from persisted scan history')
     .action(async (options) => {
       try {
-        const result = await runtime.evaluateScans()
+        if (options.failures === true) {
+          const result = await runtime.evaluateFailures()
 
-        if (options.json === true) {
-          runtime.stdout.write(`${runtime.renderEvaluationJson(result)}\n`)
+          if (options.json === true) {
+            runtime.stdout.write(`${runtime.renderFailureJson(result)}\n`)
+          } else {
+            runtime.stdout.write(`${runtime.renderFailurePlainText(result)}\n`)
+          }
         } else {
-          runtime.stdout.write(`${runtime.renderEvaluationPlainText(result)}\n`)
+          const result = await runtime.evaluateScans()
+
+          if (options.json === true) {
+            runtime.stdout.write(`${runtime.renderEvaluationJson(result)}\n`)
+          } else {
+            runtime.stdout.write(`${runtime.renderEvaluationPlainText(result)}\n`)
+          }
         }
 
         exitCode = 0
@@ -207,12 +222,14 @@ async function createRuntime(overrides: Partial<CliRuntime>): Promise<CliRuntime
     { PnpmLockDependencyTraverser },
     { RegistryDependencyTraverser },
     { HeuristicRiskScorer },
+    { createEvaluateFailuresUseCase },
     { createResolveReviewStateIndexUseCase },
     { NpmPackageMetadataSource },
     { createEvaluateScansUseCase },
     { createReviewScanUseCase },
     { createScanPackageUseCase },
     { renderInk },
+    { renderFailureSurfacingJson, renderFailureSurfacingPlainText },
     { renderEvaluationJson, renderEvaluationPlainText },
     { renderJson },
     { renderPlainText },
@@ -224,12 +241,14 @@ async function createRuntime(overrides: Partial<CliRuntime>): Promise<CliRuntime
     import('../adapters/pnpm-lock-dependency-traverser.js'),
     import('../adapters/registry-dependency-traverser.js'),
     import('../adapters/heuristic-risk-scorer.js'),
+    import('../application/evaluate-failures.js'),
     import('../application/resolve-review-state-index.js'),
     import('../adapters/npm-package-metadata-source.js'),
     import('../application/evaluate-scans.js'),
     import('../application/review-scan.js'),
     import('../application/scan-package.js'),
     import('../interface/console-renderer.js'),
+    import('../interface/evaluation-failure-renderer.js'),
     import('../interface/evaluation-renderer.js'),
     import('../interface/json-renderer.js'),
     import('../interface/plain-text-renderer.js'),
@@ -283,6 +302,9 @@ async function createRuntime(overrides: Partial<CliRuntime>): Promise<CliRuntime
     reviewScan: createReviewScanUseCase({
       reviewStore,
     }),
+    evaluateFailures: createEvaluateFailuresUseCase({
+      scanRecordSource: reviewStore,
+    }),
     evaluateScans: createEvaluateScansUseCase({
       scanRecordSource: reviewStore,
       rawReviewEventSource: reviewStore,
@@ -292,6 +314,8 @@ async function createRuntime(overrides: Partial<CliRuntime>): Promise<CliRuntime
     renderPlainText,
     renderReviewJson,
     renderReviewPlainText,
+    renderFailureJson: renderFailureSurfacingJson,
+    renderFailurePlainText: renderFailureSurfacingPlainText,
     renderEvaluationJson,
     renderEvaluationPlainText,
     renderInk,
@@ -308,10 +332,13 @@ function isCompleteRuntime(overrides: Partial<CliRuntime>): overrides is CliRunt
     overrides.resolveProjectScan !== undefined &&
     overrides.reviewScan !== undefined &&
     overrides.evaluateScans !== undefined &&
+    overrides.evaluateFailures !== undefined &&
     overrides.renderJson !== undefined &&
     overrides.renderPlainText !== undefined &&
     overrides.renderReviewJson !== undefined &&
     overrides.renderReviewPlainText !== undefined &&
+    overrides.renderFailureJson !== undefined &&
+    overrides.renderFailurePlainText !== undefined &&
     overrides.renderEvaluationJson !== undefined &&
     overrides.renderEvaluationPlainText !== undefined &&
     overrides.renderInk !== undefined &&
