@@ -101,6 +101,12 @@ test('evaluate scans reports metadata coverage and latest-label counts', async (
   assert.equal(summary.export_readiness.rows_excluded_package_level, 0)
   assert.equal(summary.export_readiness.rows_excluded_placeholder_fields, 2)
   assert.equal(summary.export_readiness.rows_excluded_unavailable_fields, 0)
+  assert.deepEqual(summary.export_readiness.rows_blocking_reasons, {
+    missing_field_reliability: 0,
+    placeholder_fields: 2,
+    unavailable_fields: 2,
+    package_level: 0,
+  })
 })
 
 test('evaluate scans handles mixed historical records and readiness exclusion precedence deterministically', async () => {
@@ -181,6 +187,12 @@ test('evaluate scans handles mixed historical records and readiness exclusion pr
   assert.equal(summary.export_readiness.rows_excluded_package_level, 2)
   assert.equal(summary.export_readiness.rows_excluded_placeholder_fields, 0)
   assert.equal(summary.export_readiness.rows_excluded_unavailable_fields, 0)
+  assert.deepEqual(summary.export_readiness.rows_blocking_reasons, {
+    missing_field_reliability: 2,
+    placeholder_fields: 2,
+    unavailable_fields: 2,
+    package_level: 2,
+  })
 })
 
 test('evaluate scans excludes unavailable-tier package fields when placeholder tiers are absent', async () => {
@@ -215,6 +227,12 @@ test('evaluate scans excludes unavailable-tier package fields when placeholder t
   assert.equal(summary.export_readiness.rows_excluded_placeholder_fields, 0)
   assert.equal(summary.export_readiness.rows_excluded_unavailable_fields, 2)
   assert.equal(summary.export_readiness.rows_excluded_package_level, 0)
+  assert.deepEqual(summary.export_readiness.rows_blocking_reasons, {
+    missing_field_reliability: 0,
+    placeholder_fields: 0,
+    unavailable_fields: 2,
+    package_level: 0,
+  })
 })
 
 function createRecord({

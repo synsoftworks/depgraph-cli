@@ -142,6 +142,28 @@ test('JSONL scan review store upgrades legacy review events into explicit packag
   assert.equal(reviewEvents[0]?.review_target.target_id, 'package_finding:root@1.0.0')
 })
 
+test('JSONL scan review store normalizes legacy scan records without baseline identity metadata', async () => {
+  const workingDirectory = await mkdtemp(join(tmpdir(), 'depgraph-jsonl-'))
+  const paths = defaultScanReviewStorePaths(workingDirectory)
+  const store = new JsonlScanReviewStore(paths)
+
+  await writeLegacyScanRecord(paths.scanRecordsPath)
+
+  const records = await store.listScanRecords()
+  const record = records[0]
+
+  assert.equal(record?.scan_mode, 'registry_package')
+  assert.deepEqual(record?.baseline_identity, {
+    scan_mode: 'registry_package',
+    scan_target: 'legacy-root',
+    requested_depth: 2,
+    workspace_identity: 'local',
+  })
+  assert.equal(record?.baseline_key, 'registry_package::legacy-root::depth=2::workspace=local')
+  assert.equal(record?.edge_findings.length, 1)
+  assert.equal(record?.warnings.length, 0)
+})
+
 function createRecord({
   recordId,
   createdAt,
@@ -253,6 +275,79 @@ async function writeLegacyReviewEvent(path: string): Promise<void> {
       resolution_timestamp: '2026-04-03T00:00:00.000Z',
       review_source: 'human',
       confidence: 0.95,
+    })}\n`,
+    'utf8',
+  )
+}
+
+async function writeLegacyScanRecord(path: string): Promise<void> {
+  const { appendFile, mkdir } = await import('node:fs/promises')
+  const { dirname } = await import('node:path')
+
+  await mkdir(dirname(path), { recursive: true })
+
+  await appendFile(
+    path,
+    `${JSON.stringify({
+      record_id: 'legacy-scan-1',
+      created_at: '2026-04-01T00:00:00.000Z',
+      package: { name: 'legacy-root', version: '1.0.0' },
+      package_key: 'legacy-root@1.0.0',
+      scan_target: 'legacy-root',
+      baseline_key: 'legacy-root::depth=2',
+      baseline_record_id: null,
+      requested_depth: 2,
+      threshold: 0.4,
+      raw_score: 0,
+      risk_level: 'safe',
+      signals: [],
+      findings: [],
+      root: {
+        name: 'legacy-root',
+        version: '1.0.0',
+        key: 'legacy-root@1.0.0',
+        depth: 0,
+        age_days: 10,
+        weekly_downloads: 1000,
+        dependents_count: null,
+        deprecated_message: null,
+        is_security_tombstone: false,
+        published_at: '2026-03-22T00:00:00.000Z',
+        first_published: '2026-03-22T00:00:00.000Z',
+        last_published: '2026-03-22T00:00:00.000Z',
+        total_versions: 1,
+        dependency_count: 0,
+        publish_events_last_30_days: 1,
+        has_advisories: false,
+        risk_score: 0,
+        risk_level: 'safe',
+        signals: [],
+        recommendation: 'install',
+        dependencies: [],
+      },
+      total_scanned: 1,
+      suspicious_count: 0,
+      safe_count: 1,
+      scan_duration_ms: 1,
+      dependency_edges: [],
+      new_dependency_edge_findings: [
+        {
+          parent_key: 'legacy-root@1.0.0',
+          child_key: 'child@1.0.0',
+          path: ['legacy-root@1.0.0', 'child@1.0.0'],
+          depth: 1,
+          edge_type: 'direct',
+          baseline_record_id: null,
+          baseline_identity: {
+            scan_mode: 'registry_package',
+            scan_target: 'legacy-root',
+            requested_depth: 2,
+            workspace_identity: 'local',
+          },
+          reason: 'legacy edge finding',
+          recommendation: 'review',
+        },
+      ],
     })}\n`,
     'utf8',
   )
