@@ -285,15 +285,17 @@ export interface HeuristicOutputPresenceSummary {
 }
 
 export interface ExportReadinessSummary {
-  total_package_rows: number
+  records_total: number
+  records_with_field_reliability: number
+  records_export_ready: number
+  records_excluded_missing_field_reliability: number
+  rows_total: number
   rows_with_reliability_metadata: number
-  usable_rows: number
-  excluded_rows: number
-  excluded_missing_weekly_downloads: number
-  excluded_unresolved_registry_lookup: number
-  excluded_placeholder_fields: number
-  excluded_missing_reliability_metadata: number
-  package_level_excluded_rows: number
+  rows_export_ready: number
+  rows_excluded_missing_field_reliability: number
+  rows_excluded_placeholder_fields: number
+  rows_excluded_unavailable_fields: number
+  rows_excluded_package_level: number
 }
 
 export interface RawReviewEventSummary {

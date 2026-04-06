@@ -90,12 +90,17 @@ test('evaluate scans reports metadata coverage and latest-label counts', async (
   assert.equal(summary.field_readiness_issues.records_missing_field_reliability_count, 0)
   assert.equal(summary.integrity_signals.synthetic_project_root_count, 0)
   assert.equal(summary.heuristic_output_presence.nodes_with_risk_score, 2)
-  assert.equal(summary.export_readiness.total_package_rows, 2)
+  assert.equal(summary.export_readiness.records_total, 1)
+  assert.equal(summary.export_readiness.records_with_field_reliability, 1)
+  assert.equal(summary.export_readiness.records_export_ready, 0)
+  assert.equal(summary.export_readiness.records_excluded_missing_field_reliability, 0)
+  assert.equal(summary.export_readiness.rows_total, 2)
   assert.equal(summary.export_readiness.rows_with_reliability_metadata, 2)
-  assert.equal(summary.export_readiness.usable_rows, 0)
-  assert.equal(summary.export_readiness.excluded_missing_reliability_metadata, 0)
-  assert.equal(summary.export_readiness.package_level_excluded_rows, 2)
-  assert.equal(summary.export_readiness.excluded_placeholder_fields, 1)
+  assert.equal(summary.export_readiness.rows_export_ready, 0)
+  assert.equal(summary.export_readiness.rows_excluded_missing_field_reliability, 0)
+  assert.equal(summary.export_readiness.rows_excluded_package_level, 0)
+  assert.equal(summary.export_readiness.rows_excluded_placeholder_fields, 2)
+  assert.equal(summary.export_readiness.rows_excluded_unavailable_fields, 0)
 })
 
 test('evaluate scans handles mixed historical records and readiness exclusion precedence deterministically', async () => {
@@ -165,26 +170,64 @@ test('evaluate scans handles mixed historical records and readiness exclusion pr
   assert.equal(summary.heuristic_output_presence.nodes_with_risk_level, 3)
   assert.equal(summary.heuristic_output_presence.nodes_with_recommendation, 3)
   assert.equal(summary.heuristic_output_presence.nodes_with_signals, 3)
-  assert.equal(summary.export_readiness.total_package_rows, 4)
+  assert.equal(summary.export_readiness.records_total, 2)
+  assert.equal(summary.export_readiness.records_with_field_reliability, 1)
+  assert.equal(summary.export_readiness.records_export_ready, 0)
+  assert.equal(summary.export_readiness.records_excluded_missing_field_reliability, 1)
+  assert.equal(summary.export_readiness.rows_total, 4)
   assert.equal(summary.export_readiness.rows_with_reliability_metadata, 2)
-  assert.equal(summary.export_readiness.usable_rows, 0)
-  assert.equal(summary.export_readiness.excluded_rows, 4)
-  assert.equal(summary.export_readiness.excluded_missing_reliability_metadata, 2)
-  assert.equal(summary.export_readiness.package_level_excluded_rows, 2)
-  assert.equal(summary.export_readiness.excluded_unresolved_registry_lookup, 1)
-  assert.equal(summary.export_readiness.excluded_missing_weekly_downloads, 0)
-  assert.equal(summary.export_readiness.excluded_placeholder_fields, 0)
+  assert.equal(summary.export_readiness.rows_export_ready, 0)
+  assert.equal(summary.export_readiness.rows_excluded_missing_field_reliability, 2)
+  assert.equal(summary.export_readiness.rows_excluded_package_level, 2)
+  assert.equal(summary.export_readiness.rows_excluded_placeholder_fields, 0)
+  assert.equal(summary.export_readiness.rows_excluded_unavailable_fields, 0)
+})
+
+test('evaluate scans excludes unavailable-tier package fields when placeholder tiers are absent', async () => {
+  const report = createFieldReliabilityReport()
+  report.fields['package_node.has_advisories'] = {
+    tier: 'reliable',
+    guidance: 'Test override for unavailable-tier readiness coverage.',
+  }
+  const reviewStore = new InMemoryReviewStore(
+    [
+      createRecord({
+        fieldReliabilityOverride: report,
+      }),
+    ],
+    [],
+  )
+  const evaluateScans = createEvaluateScansUseCase({
+    scanRecordSource: reviewStore,
+    rawReviewEventSource: reviewStore,
+    resolveReviewStateIndex: createResolveReviewStateIndexUseCase({
+      reviewEventSource: reviewStore,
+    }),
+  })
+
+  const summary = await evaluateScans()
+
+  assert.equal(summary.export_readiness.records_total, 1)
+  assert.equal(summary.export_readiness.records_with_field_reliability, 1)
+  assert.equal(summary.export_readiness.records_export_ready, 0)
+  assert.equal(summary.export_readiness.rows_total, 2)
+  assert.equal(summary.export_readiness.rows_export_ready, 0)
+  assert.equal(summary.export_readiness.rows_excluded_placeholder_fields, 0)
+  assert.equal(summary.export_readiness.rows_excluded_unavailable_fields, 2)
+  assert.equal(summary.export_readiness.rows_excluded_package_level, 0)
 })
 
 function createRecord({
   recordId = 'record-1',
   includeFieldReliability = true,
+  fieldReliabilityOverride,
   rootOverrides = {},
   childOverrides = {},
   warnings = [],
 }: {
   recordId?: string
   includeFieldReliability?: boolean
+  fieldReliabilityOverride?: ReturnType<typeof createFieldReliabilityReport>
   rootOverrides?: Partial<ScanReviewRecord['root']>
   childOverrides?: Partial<ScanReviewRecord['root']['dependencies'][number]>
   warnings?: ScanReviewRecord['warnings']
@@ -243,7 +286,9 @@ function createRecord({
     baseline_record_id: null,
     requested_depth: 3,
     threshold: 0.4,
-    ...(includeFieldReliability ? { field_reliability: createFieldReliabilityReport() } : {}),
+    ...(includeFieldReliability
+      ? { field_reliability: fieldReliabilityOverride ?? createFieldReliabilityReport() }
+      : {}),
     raw_score: 0.48,
     risk_level: 'review',
     signals: [
