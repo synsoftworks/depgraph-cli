@@ -104,6 +104,18 @@ async function resolveProjectScan(projectPath: string) {
   }
 }
 
+async function resolvePnpmProjectScan(projectPath: string) {
+  return {
+    scan_mode: 'pnpm_lock' as const,
+    pnpm_lock_path: `${projectPath}/pnpm-lock.yaml`,
+    project_root: projectPath,
+    max_depth: 3,
+    threshold: 0.4,
+    verbose: false,
+    workspace_identity: projectPath,
+  }
+}
+
 function createReviewEvent(): ReviewEvent {
   return {
     event_id: '2026-04-02T00:00:00.000Z:package_finding:root@1.0.0:benign',
@@ -443,6 +455,92 @@ test('CLI scan resolves --project through project detection before scanning', as
   assert.equal(stderr.buffer, '')
 })
 
+test('CLI scan forwards explicit pnpm-lock scans as pnpm_lock mode', async () => {
+  const stdout = new MemoryStream()
+  const stderr = new MemoryStream()
+  let scanCalls = 0
+
+  const exitCode = await run(['scan', '--pnpm-lock', './pnpm-lock.yaml', '--json'], {
+    scanPackage: async (request) => {
+      scanCalls += 1
+      assert.deepEqual(request, {
+        scan_mode: 'pnpm_lock',
+        pnpm_lock_path: resolve('./pnpm-lock.yaml'),
+        project_root: process.cwd(),
+        max_depth: 3,
+        threshold: 0.4,
+        verbose: false,
+        workspace_identity: process.cwd(),
+      })
+
+      return createResult()
+    },
+    resolveProjectScan,
+    reviewScan: async () => createReviewEvent(),
+    evaluateScans: async () => createEvaluationSummary(),
+    renderJson: () => JSON.stringify(createResult()),
+    renderPlainText: () => '',
+    renderReviewJson: () => '',
+    renderReviewPlainText: () => '',
+    renderEvaluationJson: () => '',
+    renderEvaluationPlainText: () => '',
+    renderInk: async () => {},
+    stdout,
+    stderr,
+    isTty: true,
+  })
+
+  assert.equal(exitCode, 0)
+  assert.equal(scanCalls, 1)
+  assert.equal(stderr.buffer, '')
+})
+
+test('CLI scan resolves pnpm projects through project detection before scanning', async () => {
+  const stdout = new MemoryStream()
+  const stderr = new MemoryStream()
+  let resolverCalls = 0
+  let scanCalls = 0
+
+  const exitCode = await run(['scan', '--project', '.'], {
+    scanPackage: async (request) => {
+      scanCalls += 1
+      assert.deepEqual(request, {
+        scan_mode: 'pnpm_lock',
+        pnpm_lock_path: '/tmp/example-project/pnpm-lock.yaml',
+        project_root: '/tmp/example-project',
+        max_depth: 3,
+        threshold: 0.4,
+        verbose: false,
+        workspace_identity: '/tmp/example-project',
+      })
+
+      return createResult()
+    },
+    resolveProjectScan: async () => {
+      resolverCalls += 1
+      return resolvePnpmProjectScan('/tmp/example-project')
+    },
+    reviewScan: async () => createReviewEvent(),
+    evaluateScans: async () => createEvaluationSummary(),
+    renderJson: () => '',
+    renderPlainText: () => 'plain text output',
+    renderReviewJson: () => '',
+    renderReviewPlainText: () => '',
+    renderEvaluationJson: () => '',
+    renderEvaluationPlainText: () => '',
+    renderInk: async () => {},
+    stdout,
+    stderr,
+    isTty: false,
+  })
+
+  assert.equal(exitCode, 0)
+  assert.equal(resolverCalls, 1)
+  assert.equal(scanCalls, 1)
+  assert.match(stdout.buffer, /plain text output/)
+  assert.equal(stderr.buffer, '')
+})
+
 test('CLI eval command renders evaluation summaries deterministically', async () => {
   const stdout = new MemoryStream()
   const stderr = new MemoryStream()
@@ -497,6 +595,7 @@ test('CLI scan help explains the current tree projection semantics', async () =>
 
   assert.equal(exitCode, 0)
   assert.match(stdout.buffer, /Package-spec scans use registry metadata/)
-  assert.match(stdout.buffer, /Project scans currently support package-lock\.json only/)
+  assert.match(stdout.buffer, /Project scans currently support package-lock\.json and pnpm-lock\.yaml/)
+  assert.match(stdout.buffer, /--pnpm-lock <path>/)
   assert.equal(stderr.buffer, '')
 })

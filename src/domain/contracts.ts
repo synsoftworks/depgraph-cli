@@ -32,7 +32,7 @@ export type PackageMetadataStatus =
 
 // Scan mode records which structural source produced the scan.
 // Baseline matching and downstream analysis must keep these source types separate.
-export type ScanMode = 'registry_package' | 'package_lock'
+export type ScanMode = 'registry_package' | 'package_lock' | 'pnpm_lock'
 
 export interface RegistryPackageScanRequest {
   scan_mode: 'registry_package'
@@ -53,7 +53,19 @@ export interface PackageLockScanRequest {
   workspace_identity?: string
 }
 
-export type ScanRequest = RegistryPackageScanRequest | PackageLockScanRequest
+export interface PnpmLockScanRequest {
+  scan_mode: 'pnpm_lock'
+  pnpm_lock_path: string
+  project_root: string
+  max_depth: number
+  threshold: number
+  verbose: boolean
+  workspace_identity?: string
+}
+
+export type ProjectScanRequest = PackageLockScanRequest | PnpmLockScanRequest
+
+export type ScanRequest = RegistryPackageScanRequest | ProjectScanRequest
 
 export interface PackageMetadata {
   package: ResolvedPackage

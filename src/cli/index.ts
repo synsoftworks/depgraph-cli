@@ -6,7 +6,7 @@ import { Command, CommanderError, InvalidArgumentError } from 'commander'
 
 import type {
   EvaluationSummary,
-  PackageLockScanRequest,
+  ProjectScanRequest,
   ReviewEvent,
   ReviewScanRequest,
   ScanRequest,
@@ -21,7 +21,7 @@ interface WritableStreamLike {
 
 export interface CliRuntime {
   scanPackage: (request: ScanRequest) => Promise<ScanResult>
-  resolveProjectScan: (projectPath: string) => Promise<PackageLockScanRequest>
+  resolveProjectScan: (projectPath: string) => Promise<ProjectScanRequest>
   reviewScan: (request: ReviewScanRequest) => Promise<ReviewEvent>
   evaluateScans: () => Promise<EvaluationSummary>
   renderJson: (result: ScanResult) => string
@@ -54,9 +54,10 @@ export async function run(argv: string[], overrides: Partial<CliRuntime> = {}): 
 
   program
     .command('scan')
-    .description('Scan an npm package spec or a local package-lock.json project dependency view for suspicious metadata patterns.')
+    .description('Scan an npm package spec or a local lockfile-backed project dependency view for suspicious metadata patterns.')
     .argument('[package_spec]', 'Package name with optional version or range, for example lodash@4.17.21')
     .option('--package-lock <path>', 'Scan a local package-lock.json explicitly')
+    .option('--pnpm-lock <path>', 'Scan a local pnpm-lock.yaml explicitly')
     .option('--project <path>', 'Detect a supported lockfile in a project directory and scan it')
     .option('--json', 'Emit deterministic JSON output')
     .option('--no-tui', 'Emit deterministic plain text instead of Ink output')
@@ -74,13 +75,14 @@ export async function run(argv: string[], overrides: Partial<CliRuntime> = {}): 
         '',
         'Notes:',
         '  Package-spec scans use registry metadata.',
-        '  Project scans currently support package-lock.json only.',
+        '  Project scans currently support package-lock.json and pnpm-lock.yaml.',
         '  Shared packages may appear under a single path in the current view.',
         '',
         'Examples:',
         '  depgraph scan lodash@4.17.21',
         '  depgraph scan lodash --json',
         '  depgraph scan --package-lock ./package-lock.json --json',
+        '  depgraph scan --pnpm-lock ./pnpm-lock.yaml --json',
         '  depgraph scan --project . --no-tui',
         '  depgraph scan @types/node --no-tui --depth 2',
       ].join('\n'),
@@ -202,6 +204,7 @@ async function createRuntime(overrides: Partial<CliRuntime>): Promise<CliRuntime
     { JsonlScanReviewStore, defaultScanReviewStorePaths },
     { PackageLockDependencyTraverser },
     { NodeProjectScanResolver },
+    { PnpmLockDependencyTraverser },
     { RegistryDependencyTraverser },
     { HeuristicRiskScorer },
     { createResolveReviewStateIndexUseCase },
@@ -218,6 +221,7 @@ async function createRuntime(overrides: Partial<CliRuntime>): Promise<CliRuntime
     import('../adapters/jsonl-scan-review-store.js'),
     import('../adapters/package-lock-dependency-traverser.js'),
     import('../adapters/project-scan-resolver.js'),
+    import('../adapters/pnpm-lock-dependency-traverser.js'),
     import('../adapters/registry-dependency-traverser.js'),
     import('../adapters/heuristic-risk-scorer.js'),
     import('../application/resolve-review-state-index.js'),
@@ -239,6 +243,7 @@ async function createRuntime(overrides: Partial<CliRuntime>): Promise<CliRuntime
   const metadataSource = new NpmPackageMetadataSource()
   const registryTraverser = new RegistryDependencyTraverser(metadataSource)
   const packageLockTraverser = new PackageLockDependencyTraverser(metadataSource)
+  const pnpmLockTraverser = new PnpmLockDependencyTraverser(metadataSource)
   const projectScanResolver = new NodeProjectScanResolver()
   const scorer = new HeuristicRiskScorer()
 
@@ -246,20 +251,33 @@ async function createRuntime(overrides: Partial<CliRuntime>): Promise<CliRuntime
     scanPackage: createScanPackageUseCase({
       registryTraverser,
       packageLockTraverser,
+      pnpmLockTraverser,
       scorer,
       reviewStore,
     }),
     resolveProjectScan: async (projectPath: string) => {
       const resolved = await projectScanResolver.resolve(projectPath)
-
-      return {
-        scan_mode: 'package_lock',
-        package_lock_path: resolved.package_lock_path,
-        project_root: resolved.project_root,
-        max_depth: DEFAULT_MAX_DEPTH,
-        threshold: DEFAULT_THRESHOLD,
-        verbose: false,
-        workspace_identity: resolved.project_root,
+      switch (resolved.scan_mode) {
+        case 'package_lock':
+          return {
+            scan_mode: 'package_lock',
+            package_lock_path: resolved.package_lock_path!,
+            project_root: resolved.project_root,
+            max_depth: DEFAULT_MAX_DEPTH,
+            threshold: DEFAULT_THRESHOLD,
+            verbose: false,
+            workspace_identity: resolved.project_root,
+          }
+        case 'pnpm_lock':
+          return {
+            scan_mode: 'pnpm_lock',
+            pnpm_lock_path: resolved.pnpm_lock_path!,
+            project_root: resolved.project_root,
+            max_depth: DEFAULT_MAX_DEPTH,
+            threshold: DEFAULT_THRESHOLD,
+            verbose: false,
+            workspace_identity: resolved.project_root,
+          }
       }
     },
     reviewScan: createReviewScanUseCase({
@@ -307,6 +325,7 @@ async function resolveScanRequest(
   packageSpec: string | undefined,
   options: {
     packageLock?: string
+    pnpmLock?: string
     project?: string
     depth: number
     threshold: number
@@ -314,12 +333,14 @@ async function resolveScanRequest(
   },
   runtime: CliRuntime,
 ): Promise<ScanRequest> {
-  const selectedInputs = [packageSpec, options.packageLock, options.project].filter(
+  const selectedInputs = [packageSpec, options.packageLock, options.pnpmLock, options.project].filter(
     (value) => typeof value === 'string' && value.trim().length > 0,
   )
 
   if (selectedInputs.length !== 1) {
-    throw new InvalidUsageError('Provide exactly one of <package_spec>, --package-lock, or --project.')
+    throw new InvalidUsageError(
+      'Provide exactly one of <package_spec>, --package-lock, --pnpm-lock, or --project.',
+    )
   }
 
   if (typeof packageSpec === 'string' && packageSpec.trim().length > 0) {
@@ -348,16 +369,43 @@ async function resolveScanRequest(
     }
   }
 
-  const resolved = await runtime.resolveProjectScan(options.project!)
+  if (typeof options.pnpmLock === 'string' && options.pnpmLock.trim().length > 0) {
+    const { resolvePnpmLockScan } = await import('../adapters/project-scan-resolver.js')
+    const resolved = resolvePnpmLockScan(options.pnpmLock)
 
-  return {
-    scan_mode: 'package_lock',
-    package_lock_path: resolved.package_lock_path,
-    project_root: resolved.project_root,
-    max_depth: options.depth,
-    threshold: options.threshold,
-    verbose: Boolean(options.verbose),
-    workspace_identity: resolved.project_root,
+    return {
+      scan_mode: 'pnpm_lock',
+      pnpm_lock_path: resolved.pnpm_lock_path!,
+      project_root: resolved.project_root,
+      max_depth: options.depth,
+      threshold: options.threshold,
+      verbose: Boolean(options.verbose),
+      workspace_identity: resolved.project_root,
+    }
+  }
+
+  const resolved = await runtime.resolveProjectScan(options.project!)
+  switch (resolved.scan_mode) {
+    case 'package_lock':
+      return {
+        scan_mode: 'package_lock',
+        package_lock_path: resolved.package_lock_path,
+        project_root: resolved.project_root,
+        max_depth: options.depth,
+        threshold: options.threshold,
+        verbose: Boolean(options.verbose),
+        workspace_identity: resolved.project_root,
+      }
+    case 'pnpm_lock':
+      return {
+        scan_mode: 'pnpm_lock',
+        pnpm_lock_path: resolved.pnpm_lock_path,
+        project_root: resolved.project_root,
+        max_depth: options.depth,
+        threshold: options.threshold,
+        verbose: Boolean(options.verbose),
+        workspace_identity: resolved.project_root,
+      }
   }
 }
 

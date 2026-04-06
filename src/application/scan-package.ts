@@ -2,10 +2,8 @@ import type {
   BaselineIdentity,
   DependencyGraphEdge,
   EdgeFinding,
-  PackageLockScanRequest,
   RiskAssessment,
   ScanWarning,
-  ScanMode,
   ScanRequest,
   ScanReviewRecord,
 } from '../domain/contracts.js'
@@ -13,6 +11,7 @@ import type { PackageNode, RiskSignal, ScanFinding, ScanResult } from '../domain
 import { InvalidUsageError } from '../domain/errors.js'
 import type {
   PackageLockDependencyTraverser,
+  PnpmLockDependencyTraverser,
   RegistryDependencyTraverser,
   RiskScorer,
   ScanReviewStore,
@@ -42,6 +41,7 @@ import {
 interface ScanPackageDependencies {
   registryTraverser: RegistryDependencyTraverser
   packageLockTraverser: PackageLockDependencyTraverser
+  pnpmLockTraverser: PnpmLockDependencyTraverser
   scorer: RiskScorer
   reviewStore: ScanReviewStore
   now?: () => Date
@@ -58,6 +58,7 @@ type PendingScanFinding = Omit<ScanFinding, 'review_target'>
 export function createScanPackageUseCase({
   registryTraverser,
   packageLockTraverser,
+  pnpmLockTraverser,
   scorer,
   reviewStore,
   now = () => new Date(),
@@ -71,6 +72,7 @@ export function createScanPackageUseCase({
       maxDepth,
       registryTraverser,
       packageLockTraverser,
+      pnpmLockTraverser,
     )
     const scanTarget = resolveScanTarget(request, traversedGraph)
     const baselineIdentity = baselineIdentityForScan(
@@ -213,12 +215,15 @@ async function traverseForRequest(
   maxDepth: number,
   registryTraverser: RegistryDependencyTraverser,
   packageLockTraverser: PackageLockDependencyTraverser,
+  pnpmLockTraverser: PnpmLockDependencyTraverser,
 ): Promise<TraversedDependencyGraph> {
   switch (request.scan_mode) {
     case 'registry_package':
       return registryTraverser.traverse(parsePackageSpec(request.package_spec), maxDepth)
     case 'package_lock':
       return packageLockTraverser.traverse(request.package_lock_path, maxDepth)
+    case 'pnpm_lock':
+      return pnpmLockTraverser.traverse(request.pnpm_lock_path, request.project_root, maxDepth)
   }
 }
 
@@ -231,11 +236,24 @@ function resolveScanTarget(request: ScanRequest, traversedGraph: TraversedDepend
         traversedGraph.nodes[0]?.package.name,
         request.project_root,
       )
+    case 'pnpm_lock':
+      return normalizeProjectScanTarget(
+        traversedGraph.nodes[0]?.package.name,
+        request.project_root,
+      )
   }
 }
 
 function resolveWorkspaceIdentity(request: ScanRequest): string | undefined {
-  return request.workspace_identity ?? (request.scan_mode === 'package_lock' ? request.project_root : undefined)
+  if (request.workspace_identity !== undefined) {
+    return request.workspace_identity
+  }
+
+  if (request.scan_mode === 'package_lock' || request.scan_mode === 'pnpm_lock') {
+    return request.project_root
+  }
+
+  return undefined
 }
 
 function describeScanSource(request: ScanRequest): string {
@@ -244,6 +262,8 @@ function describeScanSource(request: ScanRequest): string {
       return request.package_spec
     case 'package_lock':
       return request.package_lock_path
+    case 'pnpm_lock':
+      return request.pnpm_lock_path
   }
 }
 

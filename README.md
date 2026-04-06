@@ -52,6 +52,7 @@ Scan a local project from an explicit lockfile path:
 
 ```bash
 depgraph scan --package-lock ./package-lock.json
+depgraph scan --pnpm-lock ./pnpm-lock.yaml
 ```
 
 Detect a supported lockfile in the current project root:
@@ -59,6 +60,8 @@ Detect a supported lockfile in the current project root:
 ```bash
 depgraph scan --project . --json
 ```
+
+`--project` will resolve either `package-lock.json` or `pnpm-lock.yaml` when present.
 
 Append a review outcome to a stored scan finding:
 
@@ -134,8 +137,11 @@ This mode is intended for automation, CI checks, and agent tooling that needs ma
 
 - `registry_package` scans start from an npm package spec and resolve structure from registry metadata
 - `package_lock` scans start from a local `package-lock.json` and read dependency structure from the lockfile itself
+- `pnpm_lock` scans start from a local `pnpm-lock.yaml` importer view and normalize it into the same dependency graph shape used by other scan modes
 
 `package_lock` scanning currently supports `package-lock.json` with `lockfileVersion >= 2` and a `packages` map only.
+
+`pnpm_lock` scanning currently supports `pnpm-lock.yaml` importer-backed project scans with a `packages` snapshot map. Local `workspace:`, `link:`, and `file:` dependency references are reported as unsupported rather than projected dishonestly.
 
 ## Local Data Model
 
@@ -160,6 +166,7 @@ See the roadmap for what's coming.
 - [x] local scan persistence and append-only review history
 - [x] projected dependency edge delta against prior baseline
 - [x] package-lock.json project scanning
+- [x] pnpm-lock.yaml project scanning
 - [x] graceful degradation for private and non-registry dependencies
 - [x] finding-level review targets and source-precedence label integrity
 - [x] local dataset evaluation
@@ -167,7 +174,7 @@ See the roadmap for what's coming.
 ### Coming Soon
 
 - [x] depgraph.sh
-- [ ] pnpm and yarn lockfile support
+- [ ] yarn lockfile support
 - [ ] advisory database integration
 - [ ] sensitive import analysis
 - [ ] explain command
@@ -175,7 +182,6 @@ See the roadmap for what's coming.
 
 ### Future
 
-- [ ] pip / cargo / gem ecosystem support
 - [ ] maintainer history signals
 - [ ] organization-level scan aggregation
 
