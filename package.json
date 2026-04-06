@@ -1,6 +1,6 @@
 {
   "name": "@synsoftworks/depgraph-cli",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "description": "Graph-first dependency risk analysis for npm packages and dependency trees",
   "type": "module",
   "keywords": [
@@ -16,7 +16,7 @@
   ],
   "author": {
     "name": "Synthesis Softworks",
-    "email": "sara@synthesissoftworks.com"
+    "email": "sara@synthesis.software"
   },
   "license": "MIT",
   "homepage": "https://depgraph.sh",
