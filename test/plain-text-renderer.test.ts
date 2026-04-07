@@ -29,6 +29,19 @@ test('plain text renderer surfaces security-related findings before routine find
   assert.ok(securityIndex < routineIndex)
 })
 
+test('plain text renderer marks the scanned package at the tree root', () => {
+  const output = renderPlainText(createResult())
+
+  assert.match(output, /Dependency tree:\n- root@1\.0\.0 \[scanned package\] \[critical 0\.81\]/)
+})
+
+test('plain text renderer associates signal labels with each finding', () => {
+  const output = renderPlainText(createResult())
+
+  assert.match(output, /Signals: deprecated package, security warning/)
+  assert.match(output, /Signals: new package age, low version history, zero downloads, rapid publish churn/)
+})
+
 test('plain text renderer collapses duplicate deprecation and security language into one user-facing reason', () => {
   const output = renderPlainText(createResult())
 

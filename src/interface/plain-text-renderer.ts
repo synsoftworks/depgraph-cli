@@ -12,6 +12,7 @@ import {
   buildScanSummary,
   formatEdgeFindingReason,
   formatFindingReasons,
+  formatFindingSignalLabels,
   partitionFindings,
 } from './scan-output-presenter.js'
 
@@ -101,6 +102,7 @@ function renderFindings(findings: ScanResult['findings']): string[] {
     lines.push(`- ${finding.key} [${finding.risk_level} ${finding.risk_score.toFixed(2)}]`)
     lines.push(`  Path: ${formatPath(finding.path.packages)}`)
     lines.push(`  Target: ${finding.review_target.target_id}`)
+    lines.push(`  Signals: ${formatFindingSignalLabels(finding).join(', ')}`)
 
     for (const reason of formatFindingReasons(finding)) {
       lines.push(`  - ${reason}`)
@@ -113,7 +115,7 @@ function renderFindings(findings: ScanResult['findings']): string[] {
 function renderTree(node: PackageNode, prefix = '', isLast = true): string[] {
   const connector = prefix.length === 0 ? '-' : isLast ? '└─' : '├─'
   const lines = [
-    `${prefix}${connector} ${node.key}${formatNodeTags(node)} [${node.risk_level} ${node.risk_score.toFixed(2)}]`,
+    `${prefix}${connector} ${node.key}${formatNodeTags(node, prefix.length === 0)} [${node.risk_level} ${node.risk_score.toFixed(2)}]`,
   ]
   // Prefix state is derived during traversal so tree rows stay deterministic across environments.
   const childPrefix = prefix.length === 0 ? '  ' : `${prefix}${isLast ? '  ' : '│ '}`
@@ -129,8 +131,12 @@ function formatPath(packages: ScanResult['findings'][number]['path']['packages']
   return packages.map((pkg) => `${pkg.name}@${pkg.version}`).join(' > ')
 }
 
-function formatNodeTags(node: PackageNode): string {
+function formatNodeTags(node: PackageNode, isRootNode: boolean): string {
   const tags: string[] = []
+
+  if (isRootNode) {
+    tags.push('scanned package')
+  }
 
   if (node.is_project_root) {
     tags.push('project root')
