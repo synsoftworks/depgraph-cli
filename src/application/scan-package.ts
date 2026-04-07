@@ -97,6 +97,7 @@ export function createScanPackageUseCase({
     const nodeMap = new Map<string, PackageNode>()
     const pendingFindings: PendingScanFinding[] = []
     const warnings: ScanWarning[] = []
+    let hasDownloadsLookupFallback = false
     let overallRiskScore = 0
 
     for (const traversedNode of traversedGraph.nodes) {
@@ -119,6 +120,9 @@ export function createScanPackageUseCase({
           lockfile_resolved_url: traversedNode.lockfile_resolved_url ?? null,
           lockfile_integrity: traversedNode.lockfile_integrity ?? null,
         })
+      }
+      if (traversedNode.metadata?.downloads_lookup_failed === true) {
+        hasDownloadsLookupFallback = true
       }
 
       nodeMap.set(traversedNode.key, packageNode)
@@ -155,6 +159,17 @@ export function createScanPackageUseCase({
 
     const completedAt = now()
     const rootNode = nodeMap.get(traversedGraph.root_key)!
+    if (hasDownloadsLookupFallback) {
+      warnings.push({
+        kind: 'weekly_downloads_unavailable',
+        package_key: rootNode.key,
+        package_name: rootNode.name,
+        package_version: rootNode.version,
+        message: 'weekly downloads unavailable for one or more packages',
+        lockfile_resolved_url: null,
+        lockfile_integrity: null,
+      })
+    }
     const recordId = `${completedAt.toISOString()}:${packageKey({
       name: rootNode.name,
       version: rootNode.version,

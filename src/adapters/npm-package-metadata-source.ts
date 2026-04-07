@@ -27,13 +27,18 @@ interface DownloadResponse {
   downloads?: number
 }
 
+interface WeeklyDownloadsResult {
+  downloads: number | null
+  lookup_failed: boolean
+}
+
 export class NpmPackageMetadataSource implements PackageMetadataSource {
   constructor(private readonly fetcher: typeof fetch = fetch) {}
 
   async resolvePackage(spec: PackageSpec): Promise<PackageMetadata> {
-    const [packument, weeklyDownloadsCandidate] = await Promise.all([
+    const [packument, weeklyDownloadsResult] = await Promise.all([
       this.fetchPackument(spec.name),
-      this.fetchWeeklyDownloads(spec.name).catch(() => null),
+      this.fetchWeeklyDownloads(spec.name),
     ])
     const version = this.resolveVersion(packument, spec)
     const manifest = packument.versions?.[version]
@@ -47,7 +52,7 @@ export class NpmPackageMetadataSource implements PackageMetadataSource {
     const publishEventsLast30Days = this.countRecentPublishes(versionTimes, 30)
     const deprecatedMessage = manifest.deprecated ?? null
     const isSecurityTombstone = this.isSecurityTombstone(spec.name, version, deprecatedMessage)
-    const weeklyDownloads = isSecurityTombstone ? null : weeklyDownloadsCandidate
+    const weeklyDownloads = isSecurityTombstone ? null : weeklyDownloadsResult.downloads
 
     return {
       package: {
@@ -61,6 +66,7 @@ export class NpmPackageMetadataSource implements PackageMetadataSource {
       total_versions: Object.keys(packument.versions ?? {}).length,
       publish_events_last_30_days: publishEventsLast30Days,
       weekly_downloads: weeklyDownloads,
+      downloads_lookup_failed: isSecurityTombstone ? false : weeklyDownloadsResult.lookup_failed,
       deprecated_message: deprecatedMessage,
       is_security_tombstone: isSecurityTombstone,
       has_advisories: false,
@@ -221,21 +227,30 @@ export class NpmPackageMetadataSource implements PackageMetadataSource {
     )
   }
 
-  private async fetchWeeklyDownloads(name: string): Promise<number | null> {
+  private async fetchWeeklyDownloads(name: string): Promise<WeeklyDownloadsResult> {
     const url = `https://api.npmjs.org/downloads/point/last-week/${encodeURIComponent(name)}`
 
     try {
       const response = await this.fetcher(url)
 
       if (!response.ok) {
-        return null
+        return {
+          downloads: null,
+          lookup_failed: true,
+        }
       }
 
       const payload = (await response.json()) as DownloadResponse
 
-      return typeof payload.downloads === 'number' ? payload.downloads : null
+      return {
+        downloads: typeof payload.downloads === 'number' ? payload.downloads : null,
+        lookup_failed: typeof payload.downloads !== 'number',
+      }
     } catch {
-      return null
+      return {
+        downloads: null,
+        lookup_failed: true,
+      }
     }
   }
 

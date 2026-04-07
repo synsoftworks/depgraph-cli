@@ -77,6 +77,7 @@ export interface PackageMetadata {
   total_versions: number
   publish_events_last_30_days: number
   weekly_downloads: number | null
+  downloads_lookup_failed?: boolean
   deprecated_message: string | null
   is_security_tombstone: boolean
   has_advisories: boolean
@@ -121,7 +122,7 @@ export interface EdgeFinding {
 }
 
 export interface ScanWarning {
-  kind: 'unresolved_registry_lookup'
+  kind: 'unresolved_registry_lookup' | 'weekly_downloads_unavailable'
   package_key: string
   package_name: string
   package_version: string

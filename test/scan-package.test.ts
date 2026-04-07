@@ -172,6 +172,7 @@ function createMetadata(name: string, version: string): PackageMetadata {
     total_versions: 3,
     publish_events_last_30_days: 1,
     weekly_downloads: 1000,
+    downloads_lookup_failed: false,
     deprecated_message: null,
     is_security_tombstone: false,
     has_advisories: false,
@@ -1122,6 +1123,134 @@ test('package_lock scans add a low-weight unresolved_registry_lookup signal with
   assert.equal(result.root.dependencies[0]?.risk_level, 'safe')
   assert.equal(result.root.dependencies[0]?.signals[0]?.type, 'unresolved_registry_lookup')
   assert.equal(result.root.dependencies[0]?.signals[0]?.weight, 'low')
+})
+
+test('registry scans surface an aggregated warning when weekly downloads lookup falls back to unknown', async () => {
+  const reviewStore = new InMemoryReviewStore()
+  const scanPackage = createScanPackageUseCase({
+    registryTraverser: new StubRegistryTraverser({
+      root_key: 'root@1.0.0',
+      nodes: [
+        {
+          key: 'root@1.0.0',
+          package: { name: 'root', version: '1.0.0' },
+          metadata: createMetadata('root', '1.0.0'),
+          depth: 0,
+          parent_key: null,
+          path: {
+            packages: [{ name: 'root', version: '1.0.0' }],
+          },
+        },
+        {
+          key: 'child@1.0.0',
+          package: { name: 'child', version: '1.0.0' },
+          metadata: {
+            ...createMetadata('child', '1.0.0'),
+            weekly_downloads: null,
+            downloads_lookup_failed: true,
+          },
+          depth: 1,
+          parent_key: 'root@1.0.0',
+          path: {
+            packages: [
+              { name: 'root', version: '1.0.0' },
+              { name: 'child', version: '1.0.0' },
+            ],
+          },
+        },
+      ],
+    }),
+    packageLockTraverser: new StubPackageLockTraverser(createLinearGraph()),
+    pnpmLockTraverser: new StubPnpmLockTraverser(createLinearGraph()),
+    scorer: new StubScorer({}),
+    reviewStore,
+    now: () => new Date('2026-04-01T00:00:00.000Z'),
+  })
+
+  const result = await scanPackage({
+    scan_mode: 'registry_package',
+    package_spec: 'root',
+    max_depth: 3,
+    threshold: 0.4,
+    verbose: false,
+    workspace_identity: 'local',
+  })
+
+  assert.deepEqual(result.warnings, [
+    {
+      kind: 'weekly_downloads_unavailable',
+      package_key: 'root@1.0.0',
+      package_name: 'root',
+      package_version: '1.0.0',
+      message: 'weekly downloads unavailable for one or more packages',
+      lockfile_resolved_url: null,
+      lockfile_integrity: null,
+    },
+  ])
+})
+
+test('successful metadata enrichment does not emit a weekly downloads warning', async () => {
+  const reviewStore = new InMemoryReviewStore()
+  const scanPackage = createScanPackageUseCase({
+    registryTraverser: new StubRegistryTraverser(createLinearGraph()),
+    packageLockTraverser: new StubPackageLockTraverser(createLinearGraph()),
+    pnpmLockTraverser: new StubPnpmLockTraverser(createLinearGraph()),
+    scorer: new StubScorer({}),
+    reviewStore,
+    now: () => new Date('2026-04-01T00:00:00.000Z'),
+  })
+
+  const result = await scanPackage({
+    scan_mode: 'registry_package',
+    package_spec: 'root',
+    max_depth: 3,
+    threshold: 0.4,
+    verbose: false,
+    workspace_identity: 'local',
+  })
+
+  assert.deepEqual(result.warnings, [])
+})
+
+test('synthetic project roots do not emit weekly downloads warnings for their expected null root metadata', async () => {
+  const reviewStore = new InMemoryReviewStore()
+  const scanPackage = createScanPackageUseCase({
+    registryTraverser: new StubRegistryTraverser(createLinearGraph()),
+    packageLockTraverser: new StubPackageLockTraverser({
+      root_key: 'project@1.0.0',
+      nodes: [
+        {
+          key: 'project@1.0.0',
+          package: { name: 'project', version: '1.0.0' },
+          metadata: createMetadata('project', '1.0.0'),
+          depth: 0,
+          parent_key: null,
+          path: {
+            packages: [{ name: 'project', version: '1.0.0' }],
+          },
+          is_virtual_root: true,
+        },
+      ],
+    }),
+    pnpmLockTraverser: new StubPnpmLockTraverser(createLinearGraph()),
+    scorer: new StubScorer({}),
+    reviewStore,
+    now: () => new Date('2026-04-01T00:00:00.000Z'),
+  })
+
+  const result = await scanPackage({
+    scan_mode: 'package_lock',
+    package_lock_path: '/tmp/project/package-lock.json',
+    project_root: '/tmp/project',
+    max_depth: 3,
+    threshold: 0.4,
+    verbose: false,
+    workspace_identity: 'local',
+  })
+
+  assert.equal(result.root.is_project_root, true)
+  assert.equal(result.root.weekly_downloads, null)
+  assert.deepEqual(result.warnings, [])
 })
 
 function createLinearGraph(): TraversedDependencyGraph {

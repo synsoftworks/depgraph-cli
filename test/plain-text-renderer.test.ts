@@ -75,6 +75,28 @@ test('plain text renderer omits the warnings section when there are no warnings'
   assert.doesNotMatch(output, /\nWarnings:\n- none/)
 })
 
+test('plain text renderer keeps aggregated download warnings in the existing warnings section', () => {
+  const result = createResult()
+  result.warnings = [
+    {
+      kind: 'weekly_downloads_unavailable',
+      package_key: 'root@1.0.0',
+      package_name: 'root',
+      package_version: '1.0.0',
+      message: 'weekly downloads unavailable for one or more packages',
+      lockfile_resolved_url: null,
+      lockfile_integrity: null,
+    },
+  ]
+
+  const output = renderPlainText(result)
+
+  assert.match(
+    output,
+    /- root@1\.0\.0 \[weekly_downloads_unavailable\] weekly downloads unavailable for one or more packages/,
+  )
+})
+
 test('plain text renderer does not mutate finding explanations or signals', () => {
   const result = createResult()
   const before = JSON.parse(JSON.stringify(result))
