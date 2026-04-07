@@ -10,10 +10,7 @@
   <a href="https://github.com/synsoftworks/depgraph-cli/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/github/license/synsoftworks/depgraph-cli?style=flat-square"></a>
 </p>
 
-DepGraph scores npm packages and their transitive dependencies against 
-behavioral signals, publish age, version velocity, registry deprecation  
-and tells you exactly why something looks suspicious. Signature-based 
-scanners miss what DepGraph catches by design.
+DepGraph scores npm packages and their transitive dependencies against behavioral signals, publish age, version velocity, and registry deprecation. It tells you exactly why something looks suspicious. Signature-based scanners miss what DepGraph catches by design.
 
 Run it before every install. Use the JSON output in CI. Built for agents.
 
@@ -72,7 +69,7 @@ Append a review outcome to a stored scan finding:
 depgraph review <record_id> --target package_finding:axios@1.14.0 --outcome benign --notes "reviewed by analyst"
 ```
 
-Inspect local dataset coverage and readiness:
+Check how many of your scanned packages have full metadata enrichment versus degraded coverage:
 
 ```bash
 depgraph eval
@@ -111,9 +108,9 @@ next@15.1.7
 
 review (0.64)
 
-- packages requiring review: 2
+- packages requiring review: 1
 - findings with security-related signals: 1
-- packages that appear safe: 12
+- packages that appear safe: 13
 ```
 
 ## JSON Example
@@ -191,7 +188,7 @@ Pre-v1. Interfaces may change before 1.0.
 
 ## Roadmap
 
-### Shipped
+### v0.2 — Shipped
 
 - [x] npm package scanning with traversal
 - [x] rich Ink terminal UI and plain text mode
@@ -205,15 +202,15 @@ Pre-v1. Interfaces may change before 1.0.
 - [x] local dataset evaluation
 - [x] depgraph.sh
 
-### Coming Soon
+### v0.3 — In Progress
 
 - [ ] yarn lockfile support
-- [ ] sensitive import analysis
 - [ ] explain command
 - [ ] CI/CD GitHub Action
 
-### Future
+### Later
 
+- [ ] sensitive import analysis
 - [ ] maintainer history signals
 - [ ] organization-level scan aggregation
 

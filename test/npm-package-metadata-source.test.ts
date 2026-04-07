@@ -94,6 +94,46 @@ test('metadata source marks npm security tombstones and ignores inherited downlo
   assert.equal(metadata.is_security_tombstone, true)
   assert.match(metadata.deprecated_message ?? '', /security placeholder/i)
   assert.equal(metadata.weekly_downloads, null)
+  assert.equal(metadata.downloads_lookup_failed, false)
+})
+
+test('metadata source marks weekly downloads as unavailable when the downloads endpoint fails', async () => {
+  const source = new NpmPackageMetadataSource(async (input) => {
+    const url = String(input)
+
+    if (url.startsWith('https://api.npmjs.org/downloads/')) {
+      return new Response('upstream unavailable', { status: 503 })
+    }
+
+    return new Response(
+      JSON.stringify({
+        name: 'demo-package',
+        'dist-tags': {
+          latest: '1.2.3',
+        },
+        versions: {
+          '1.2.3': {
+            version: '1.2.3',
+            dependencies: {},
+          },
+        },
+        time: {
+          created: '2014-09-02T01:28:28.167Z',
+          modified: '2024-01-15T10:22:33.000Z',
+          '1.2.3': '2024-01-15T10:22:33.000Z',
+        },
+      }),
+      {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      },
+    )
+  })
+
+  const metadata = await source.resolvePackage({ name: 'demo-package' })
+
+  assert.equal(metadata.weekly_downloads, null)
+  assert.equal(metadata.downloads_lookup_failed, true)
 })
 
 test('metadata source throws when publish timestamps are unavailable', async () => {
