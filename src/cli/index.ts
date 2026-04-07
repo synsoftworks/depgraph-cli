@@ -27,6 +27,7 @@ export interface CliRuntime {
   evaluateScans: () => Promise<EvaluationSummary>
   evaluateFailures: () => Promise<FailureSurfacingSummary>
   renderJson: (result: ScanResult) => string
+  renderSummaryText: (result: ScanResult) => string
   renderPlainText: (result: ScanResult) => string
   renderReviewJson: (event: ReviewEvent) => string
   renderReviewPlainText: (event: ReviewEvent) => string
@@ -64,6 +65,8 @@ export async function run(argv: string[], overrides: Partial<CliRuntime> = {}): 
     .option('--pnpm-lock <path>', 'Scan a local pnpm-lock.yaml explicitly')
     .option('--project <path>', 'Detect a supported lockfile in a project directory and scan it')
     .option('--json', 'Emit deterministic JSON output')
+    .option('--summary', 'Emit a compact scan summary without the tree or detailed findings')
+    .option('--fail-on-review', 'Preserved for compatibility; scan already exits 1 when findings exist')
     .option('--no-tui', 'Emit deterministic plain text instead of Ink output')
     .option('--depth <number>', 'Cap how far the resolved dependency tree projection is traversed', parseDepth, DEFAULT_MAX_DEPTH)
     .option(
@@ -99,6 +102,8 @@ export async function run(argv: string[], overrides: Partial<CliRuntime> = {}): 
 
         if (options.json === true) {
           runtime.stdout.write(`${runtime.renderJson(result)}\n`)
+        } else if (options.summary === true) {
+          runtime.stdout.write(`${runtime.renderSummaryText(result)}\n`)
         } else if (options.tui === false || !runtime.isTty) {
           runtime.stdout.write(`${runtime.renderPlainText(result)}\n`)
         } else {
@@ -233,6 +238,7 @@ async function createRuntime(overrides: Partial<CliRuntime>): Promise<CliRuntime
     { renderEvaluationJson, renderEvaluationPlainText },
     { renderJson },
     { renderPlainText },
+    { renderSummaryText },
     { renderReviewJson, renderReviewPlainText },
   ] = await Promise.all([
     import('../adapters/jsonl-scan-review-store.js'),
@@ -252,6 +258,7 @@ async function createRuntime(overrides: Partial<CliRuntime>): Promise<CliRuntime
     import('../interface/evaluation-renderer.js'),
     import('../interface/json-renderer.js'),
     import('../interface/plain-text-renderer.js'),
+    import('../interface/summary-renderer.js'),
     import('../interface/review-renderer.js'),
   ])
 
@@ -311,6 +318,7 @@ async function createRuntime(overrides: Partial<CliRuntime>): Promise<CliRuntime
       resolveReviewStateIndex,
     }),
     renderJson,
+    renderSummaryText,
     renderPlainText,
     renderReviewJson,
     renderReviewPlainText,
@@ -334,6 +342,7 @@ function isCompleteRuntime(overrides: Partial<CliRuntime>): overrides is CliRunt
     overrides.evaluateScans !== undefined &&
     overrides.evaluateFailures !== undefined &&
     overrides.renderJson !== undefined &&
+    overrides.renderSummaryText !== undefined &&
     overrides.renderPlainText !== undefined &&
     overrides.renderReviewJson !== undefined &&
     overrides.renderReviewPlainText !== undefined &&

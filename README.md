@@ -133,6 +133,16 @@ Trimmed example:
 
 This mode is intended for automation, CI checks, and agent tooling that needs machine-readable output instead of terminal formatting.
 
+## CI Integration
+
+Use `--summary` for compact, deterministic scan results in CI logs.
+```yaml
+- name: Scan dependencies
+  run: depgraph scan --project . --summary
+```
+
+Exit code is `1` when any findings exist, `0` when all packages appear safe.
+
 ## Current Scan Modes
 
 - `registry_package` scans start from an npm package spec and resolve structure from registry metadata
