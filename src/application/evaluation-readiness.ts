@@ -1,3 +1,12 @@
+/**
+ * Responsibilities:
+ * - Derive evaluation-readiness summaries from persisted scan records.
+ * - Apply deterministic aggregation and exclusion precedence for reporting.
+ *
+ * Non-responsibilities:
+ * - Do not perform scanning, scoring, or presentation rendering.
+ * - Do not mutate stored review or scan history.
+ */
 import type {
   ExportReadinessSummary,
   FieldReadinessIssuesSummary,
@@ -39,6 +48,12 @@ interface EvaluationDatasetSummary {
   export_readiness: ExportReadinessSummary
 }
 
+/**
+ * Aggregates persisted scan records into evaluation-readiness summaries.
+ *
+ * @param scanRecords Stored scan review records to analyze.
+ * @returns Deterministic aggregate summaries for evaluation reporting.
+ */
 export function buildEvaluationDatasetSummary(scanRecords: ScanReviewRecord[]): EvaluationDatasetSummary {
   const signalCounts = new Map<string, number>()
   const knownDownloadsSignalCounts = new Map<string, number>()
@@ -79,11 +94,13 @@ export function buildEvaluationDatasetSummary(scanRecords: ScanReviewRecord[]): 
     const unresolvedIssues = new Set<string>()
     const fieldReliability = record.field_reliability
     const recordHasFieldReliability = fieldReliability !== undefined
+    // Conditional tiers stay eligible because downstream consumers can still reason about present-vs-missing values explicitly.
     const hasPlaceholderPackageNodeFields =
       fieldReliability !== undefined &&
       Object.entries(fieldReliability.fields).some(
         ([fieldId, entry]) => fieldId.startsWith('package_node.') && entry.tier === 'placeholder',
       )
+    // Unavailable package-node fields block export because the dataset cannot distinguish missing evidence from absent package behavior.
     const hasUnavailablePackageNodeFields =
       fieldReliability !== undefined &&
       Object.entries(fieldReliability.fields).some(
@@ -122,6 +139,9 @@ export function buildEvaluationDatasetSummary(scanRecords: ScanReviewRecord[]): 
         deprecatedWithSecuritySignalCount += 1
       }
 
+      // Blocking reasons are tracked independently so the summary can report
+      // both primary exclusion counts (single-bucket) and all-reasons-present
+      // counts without double-counting in either view.
       const blockingReasons = determineExportBlockingReasons({
         node,
         recordHasFieldReliability,
@@ -292,6 +312,12 @@ export function buildEvaluationDatasetSummary(scanRecords: ScanReviewRecord[]): 
   }
 }
 
+/**
+ * Detects whether a deprecation message carries security-related wording for evaluation summaries.
+ *
+ * @param message Deprecation message captured in a stored scan record.
+ * @returns `true` when the message matches the evaluation security patterns.
+ */
 export function isSecurityRelatedDeprecationMessage(message: string): boolean {
   return SECURITY_DEPRECATION_PATTERNS.some((pattern) => pattern.test(message))
 }
@@ -345,6 +371,7 @@ function determineExportBlockingReasons({
 function determinePrimaryExportExclusionReason(
   blockingReasons: Set<(typeof EXPORT_EXCLUSION_ORDER)[number]>,
 ): typeof EXPORT_EXCLUSION_ORDER[number] | undefined {
+  // The first matching reason wins so exclusion totals remain single-bucket and reproducible.
   for (const reason of EXPORT_EXCLUSION_ORDER) {
     if (blockingReasons.has(reason)) {
       return reason

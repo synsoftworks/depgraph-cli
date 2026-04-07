@@ -1,3 +1,12 @@
+/**
+ * Responsibilities:
+ * - Render the full deterministic plain-text scan surface for non-TUI flows.
+ * - Apply presentation hierarchy using precomputed scan data and presenter projections.
+ *
+ * Non-responsibilities:
+ * - Do not compute scores, collapse raw signals, or apply policy decisions.
+ * - Do not shape JSON or terminal UI output.
+ */
 import type { PackageNode, ScanResult } from '../domain/entities.js'
 import {
   buildScanSummary,
@@ -6,6 +15,12 @@ import {
   partitionFindings,
 } from './scan-output-presenter.js'
 
+/**
+ * Renders the full plain-text scan output for `--no-tui` and non-interactive usage.
+ *
+ * @param result Completed scan result.
+ * @returns Deterministic plain-text output including summary, warnings, findings, and tree.
+ */
 export function renderPlainText(result: ScanResult): string {
   const summary = buildScanSummary(result)
   const findings = partitionFindings(result.findings)
@@ -100,6 +115,7 @@ function renderTree(node: PackageNode, prefix = '', isLast = true): string[] {
   const lines = [
     `${prefix}${connector} ${node.key}${formatNodeTags(node)} [${node.risk_level} ${node.risk_score.toFixed(2)}]`,
   ]
+  // Prefix state is derived during traversal so tree rows stay deterministic across environments.
   const childPrefix = prefix.length === 0 ? '  ' : `${prefix}${isLast ? '  ' : '│ '}`
 
   node.dependencies.forEach((dependency, index) => {

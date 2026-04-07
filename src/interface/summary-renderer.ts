@@ -1,6 +1,21 @@
+/**
+ * Responsibilities:
+ * - Render the compact scan summary mode for CI and human log consumption.
+ * - Format only high-signal fields already computed by the scan result.
+ *
+ * Non-responsibilities:
+ * - Do not render detailed findings, tree structure, or JSON output.
+ * - Do not derive new counts, scores, or policy decisions.
+ */
 import type { ScanResult } from '../domain/entities.js'
 import { buildCompactScanSummary } from './scan-output-presenter.js'
 
+/**
+ * Renders the minimal scan summary output for `scan --summary`.
+ *
+ * @param result Completed scan result.
+ * @returns Deterministic compact text containing the root package, overall risk, and key counts.
+ */
 export function renderSummaryText(result: ScanResult): string {
   const summary = buildCompactScanSummary(result)
 
