@@ -10,9 +10,9 @@
   <a href="https://github.com/synsoftworks/depgraph-cli/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/github/license/synsoftworks/depgraph-cli?style=flat-square"></a>
 </p>
 
-DepGraph is a supply chain security tool that lives in your terminal, scans an npm package plus its current registry-resolved dependency tree projection for attack signals, and tells you why a package looks suspicious before you ship it.
+DepGraph is a supply chain security tool that lives in your terminal. It scans npm packages and their dependencies for attack signals and tells you why something looks suspicious.
 
-Run it before every install. Use the JSON output in CI. Agent friendly 🤖
+Run it before every install. Use the JSON output in CI. Agent friendly.
 
 ## Get Started
 
@@ -99,6 +99,20 @@ Current tree view:
 - plain-crypto-js@0.0.1-security.0 [critical 1.00]
 ```
 
+## Summary Example
+
+Compact summary output for CI logs or quick review:
+
+```text
+next@15.1.7
+
+review (0.64)
+
+- packages requiring review: 2
+- findings with security-related signals: 1
+- packages that appear safe: 12
+```
+
 ## JSON Example
 
 Use `--json` when DepGraph is being called from CI, scripts, or agents. JSON mode bypasses terminal rendering and emits a deterministic result shape.
@@ -136,6 +150,7 @@ This mode is intended for automation, CI checks, and agent tooling that needs ma
 ## CI Integration
 
 Use `--summary` for compact, deterministic scan results in CI logs.
+
 ```yaml
 - name: Scan dependencies
   run: depgraph scan --project . --summary
@@ -156,6 +171,8 @@ Exit code is `1` when any findings exist, `0` when all packages appear safe.
 ## Local Data Model
 
 DepGraph now persists repo-local history under `.depgraph/`:
+
+This history powers baseline diffing and the `depgraph eval` dataset readiness report.
 
 - `scans.jsonl` for immutable scan records
 - `review-events.jsonl` for append-only review annotations
@@ -193,12 +210,6 @@ See the roadmap for what's coming.
 
 - [ ] maintainer history signals
 - [ ] organization-level scan aggregation
-
-## Philosophy
-
-DepGraph follows a simple rule: data first, presentation second.
-
-Each command produces structured scan data first, then renders it for either a human terminal session or an agent-oriented JSON consumer. The CLI is designed to work well for both without mixing business logic into presentation.
 
 ## Contributing
 
