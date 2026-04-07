@@ -1,3 +1,12 @@
+/**
+ * Responsibilities:
+ * - Surface known failure patterns from persisted scan history.
+ * - Deduplicate historical matches into stable failure summaries.
+ *
+ * Non-responsibilities:
+ * - Do not perform new scans, change review state, or render output.
+ * - Do not recalculate package risk, signals, or thresholds.
+ */
 import type { ScanReviewRecord } from '../domain/contracts.js'
 import type { PackageNode } from '../domain/entities.js'
 import type { FailureSurfacingSummary, SurfacedFailure } from '../domain/failure-surfacing.js'
@@ -9,6 +18,12 @@ interface EvaluateFailuresDependencies {
   scanRecordSource: Pick<ScanReviewStore, 'listScanRecords'>
 }
 
+/**
+ * Creates the failure-surfacing use case over persisted scan history.
+ *
+ * @param dependencies Access to stored scan records.
+ * @returns A use case that summarizes known historical failure patterns.
+ */
 export function createEvaluateFailuresUseCase({
   scanRecordSource,
 }: EvaluateFailuresDependencies) {
@@ -96,6 +111,7 @@ function upsertSurfacedFailure(
     return
   }
 
+  // Record ids are merged into a set so repeated historical matches stay idempotent across multiple scans.
   const recordIds = new Set([...existing.record_ids, ...failure.record_ids])
   existing.record_ids = [...recordIds].sort((left, right) => left.localeCompare(right))
 }
