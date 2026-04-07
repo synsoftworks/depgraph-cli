@@ -8,6 +8,7 @@ import type { FailureSurfacingSummary } from '../src/domain/failure-surfacing.js
 import { createFieldReliabilityReport } from '../src/domain/field-reliability-policy.js'
 import { NetworkFailureError } from '../src/domain/errors.js'
 import type { ScanResult } from '../src/domain/entities.js'
+import { renderJson as renderScanJson } from '../src/interface/json-renderer.js'
 
 class MemoryStream {
   buffer = ''
@@ -355,6 +356,40 @@ test('CLI maps network failures to exit code 3', async () => {
 
   assert.equal(exitCode, 3)
   assert.match(stderr.buffer, /registry down/)
+})
+
+test('CLI scan --json omits field reliability metadata from public output', async () => {
+  const stdout = new MemoryStream()
+  const stderr = new MemoryStream()
+
+  const exitCode = await run(['scan', 'root', '--json'], {
+    scanPackage: async () => createResult(),
+    resolveProjectScan,
+    reviewScan: async () => createReviewEvent(),
+    evaluateFailures: async () => createFailureSurfacingSummary(),
+    evaluateScans: async () => createEvaluationSummary(),
+    renderJson: (result) => renderScanJson(result),
+    renderSummaryText: () => '',
+    renderPlainText: () => '',
+    renderReviewJson: () => '',
+    renderReviewPlainText: () => '',
+    renderFailureJson: () => '',
+    renderFailurePlainText: () => '',
+    renderEvaluationJson: () => '',
+    renderEvaluationPlainText: () => '',
+    renderInk: async () => {},
+    stdout,
+    stderr,
+    isTty: true,
+  })
+
+  const parsed = JSON.parse(stdout.buffer)
+
+  assert.equal(exitCode, 0)
+  assert.equal(parsed.field_reliability, undefined)
+  assert.equal(parsed.record_id, '2026-04-01T00:00:00.000Z:root@1.0.0:depth=3')
+  assert.equal(parsed.root.key, 'root@1.0.0')
+  assert.equal(stderr.buffer, '')
 })
 
 test('CLI review command forwards explicit target ids deterministically', async () => {
