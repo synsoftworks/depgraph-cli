@@ -10,9 +10,12 @@
   <a href="https://github.com/synsoftworks/depgraph-cli/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/github/license/synsoftworks/depgraph-cli?style=flat-square"></a>
 </p>
 
-DepGraph is a supply chain security tool that lives in your terminal. It scans npm packages and their dependencies for attack signals and tells you why something looks suspicious.
+DepGraph scores npm packages and their transitive dependencies against 
+behavioral signals, publish age, version velocity, registry deprecation  
+and tells you exactly why something looks suspicious. Signature-based 
+scanners miss what DepGraph catches by design.
 
-Run it before every install. Use the JSON output in CI. Agent friendly.
+Run it before every install. Use the JSON output in CI. Built for agents.
 
 ## Get Started
 
@@ -179,9 +182,12 @@ This history powers baseline diffing and the `depgraph eval` dataset readiness r
 
 ## Status
 
-DepGraph is pre-v1 and under active development. Core scanning works.
-Some dependency types degrade gracefully rather than fully enriching.
-See the roadmap for what's coming.
+Core scanning is stable. Registry package scanning, lockfile scanning 
+(npm and pnpm), baseline diffing, and CI integration all work reliably 
+today. Some dependency types — private packages, workspace references, 
+local file links — degrade gracefully rather than failing.
+
+Pre-v1. Interfaces may change before 1.0.
 
 ## Roadmap
 

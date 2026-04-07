@@ -1,5 +1,5 @@
 import type { PackageMetadata, RiskAssessment } from '../domain/contracts.js'
-import type { RiskSignal } from '../domain/entities.js'
+import type { RiskSignal, RiskSignalWeight } from '../domain/entities.js'
 import type { RiskScorer, RiskScorerContext } from '../domain/ports.js'
 import {
   calculateAgeDays,
@@ -125,14 +125,15 @@ export class HeuristicRiskScorer implements RiskScorer {
       })
     }
 
-    const riskScore = riskScoreForSignals(signals)
+    const calibratedSignals = calibrateFreshnessSignals(signals)
+    const riskScore = riskScoreForSignals(calibratedSignals)
     const riskLevel = riskLevelForScore(riskScore)
 
     return {
       risk_score: riskScore,
       risk_level: riskLevel,
       recommendation: recommendationForRiskLevel(riskLevel),
-      signals,
+      signals: calibratedSignals,
     }
   }
 }
@@ -142,5 +143,36 @@ function isFreshReleaseOnMaturePackage(metadata: PackageMetadata): boolean {
     metadata.total_versions >= MATURE_PACKAGE_VERSION_THRESHOLD &&
     metadata.weekly_downloads !== null &&
     metadata.weekly_downloads >= MATURE_PACKAGE_DOWNLOAD_THRESHOLD
+  )
+}
+
+function calibrateFreshnessSignals(signals: RiskSignal[]): RiskSignal[] {
+  const hasNewPackageAge = signals.some((signal) => signal.type === 'new_package_age')
+  const hasRapidPublishChurn = signals.some((signal) => signal.type === 'rapid_publish_churn')
+
+  if (!hasNewPackageAge || !hasRapidPublishChurn || hasStrongerThanFreshnessConcern(signals)) {
+    return signals
+  }
+
+  // Freshness and churn stay visible, but this pair alone should not cross review without stronger corroborating evidence.
+  return signals.map((signal) =>
+    signal.type === 'new_package_age'
+      ? {
+          ...signal,
+          weight: 'medium' satisfies RiskSignalWeight,
+        }
+      : signal,
+  )
+}
+
+function hasStrongerThanFreshnessConcern(signals: RiskSignal[]): boolean {
+  return signals.some(
+    (signal) =>
+      ![
+        'new_package_age',
+        'fresh_release_on_mature_package',
+        'rapid_publish_churn',
+        'large_dependency_surface',
+      ].includes(signal.type),
   )
 }

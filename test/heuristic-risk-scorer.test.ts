@@ -112,6 +112,35 @@ test('heuristic scorer dampens freshness for mature high-download packages', () 
   assert.ok(result.signals.some((signal) => signal.type === 'rapid_publish_churn'))
 })
 
+test('heuristic scorer keeps freshness and churn informational for established packages without stronger concerns', () => {
+  const scorer = new HeuristicRiskScorer(() => NOW)
+  const metadata = createMetadata({
+    package: {
+      name: 'path-to-regexp',
+      version: '8.4.2',
+    },
+    published_at: '2026-03-27T00:00:00.000Z',
+    first_published_at: '2014-01-01T00:00:00.000Z',
+    last_published_at: '2026-03-27T00:00:00.000Z',
+    total_versions: 42,
+    weekly_downloads: 50_000,
+    publish_events_last_30_days: 4,
+  })
+
+  const result = scorer.assessPackage(metadata, {
+    depth: 0,
+    path: {
+      packages: [{ name: 'path-to-regexp', version: '8.4.2' }],
+    },
+    dependency_count: 0,
+  })
+
+  assert.equal(result.risk_level, 'safe')
+  assert.equal(result.risk_score, 0.32)
+  assert.equal(result.signals.find((signal) => signal.type === 'new_package_age')?.weight, 'medium')
+  assert.ok(result.signals.some((signal) => signal.type === 'rapid_publish_churn'))
+})
+
 test('heuristic scorer keeps the existing freshness signal for genuinely new packages', () => {
   const scorer = new HeuristicRiskScorer(() => NOW)
   const metadata = createMetadata({
@@ -133,6 +162,33 @@ test('heuristic scorer keeps the existing freshness signal for genuinely new pac
 
   assert.ok(result.signals.some((signal) => signal.type === 'new_package_age'))
   assert.ok(!result.signals.some((signal) => signal.type === 'fresh_release_on_mature_package'))
+})
+
+test('heuristic scorer still escalates low-history packages when freshness is supported by stronger concerns', () => {
+  const scorer = new HeuristicRiskScorer(() => NOW)
+  const metadata = createMetadata({
+    published_at: '2026-03-31T00:00:00.000Z',
+    total_versions: 2,
+    weekly_downloads: 5_000,
+    publish_events_last_30_days: 4,
+  })
+
+  const result = scorer.assessPackage(metadata, {
+    depth: 1,
+    path: {
+      packages: [
+        { name: 'root', version: '1.0.0' },
+        { name: 'risky-package', version: '1.0.0' },
+      ],
+    },
+    dependency_count: 0,
+  })
+
+  assert.equal(result.risk_level, 'review')
+  assert.equal(result.risk_score, 0.64)
+  assert.equal(result.signals.find((signal) => signal.type === 'new_package_age')?.weight, 'high')
+  assert.ok(result.signals.some((signal) => signal.type === 'low_version_history'))
+  assert.ok(result.signals.some((signal) => signal.type === 'rapid_publish_churn'))
 })
 
 test('heuristic scorer does not dampen freshness when weekly downloads are unknown', () => {
@@ -206,6 +262,7 @@ test('heuristic scorer escalates deprecations with security language to review',
   })
 
   assert.equal(result.risk_level, 'review')
+  assert.equal(result.risk_score, 0.48)
   assert.ok(result.risk_score >= 0.4)
   assert.ok(result.signals.some((signal) => signal.type === 'deprecated_package'))
   assert.ok(result.signals.some((signal) => signal.type === 'security_deprecation_language'))
