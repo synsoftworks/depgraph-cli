@@ -207,6 +207,18 @@ export function formatFindingReasons(finding: Pick<ScanFinding, 'signals' | 'exp
 }
 
 /**
+ * Formats concise, stable signal labels for finding-level presentation.
+ *
+ * @param finding Finding with its precomputed signal list.
+ * @returns Deduplicated human-facing signal labels in original signal order.
+ */
+export function formatFindingSignalLabels(finding: Pick<ScanFinding, 'signals'>): string[] {
+  return deduplicate(
+    finding.signals.map((signal) => formatSignalLabel(signal.type)),
+  )
+}
+
+/**
  * Formats a user-facing explanation for an edge finding.
  *
  * @param edgeFinding Newly introduced dependency edge finding.
@@ -238,6 +250,41 @@ function isSecurityRelatedSignal(signal: RiskSignal): boolean {
   // Older records may only retain a generic deprecation signal, so the message text is the fallback signal.
   const value = typeof signal.value === 'string' ? signal.value : signal.reason
   return SECURITY_MESSAGE_PATTERN.test(value)
+}
+
+function formatSignalLabel(type: string): string {
+  switch (type) {
+    case 'security_tombstone':
+      return 'security tombstone'
+    case 'security_deprecation_language':
+      return 'security warning'
+    case 'deprecated_package':
+      return 'deprecated package'
+    case 'new_and_unproven':
+      return 'new and unproven'
+    case 'new_package_age':
+      return 'new package age'
+    case 'fresh_release_on_mature_package':
+      return 'fresh release on mature package'
+    case 'low_version_history':
+      return 'low version history'
+    case 'low_weekly_downloads':
+      return 'low weekly downloads'
+    case 'zero_downloads':
+      return 'zero downloads'
+    case 'rapid_publish_churn':
+      return 'rapid publish churn'
+    case 'large_dependency_surface':
+      return 'large dependency surface'
+    case 'unresolved_registry_lookup':
+      return 'registry metadata unavailable'
+    case 'new_direct_dependency_edge':
+      return 'new direct dependency'
+    case 'new_transitive_dependency_edge':
+      return 'new transitive dependency'
+    default:
+      return type.replaceAll('_', ' ')
+  }
 }
 
 function formatSecurityDeprecationReason(signal: RiskSignal): string {

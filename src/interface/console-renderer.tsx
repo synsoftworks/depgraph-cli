@@ -27,7 +27,6 @@ function AutoExit(): React.JSX.Element | null {
 
 function ScanResultView({ result }: { result: ScanResult }): React.JSX.Element {
   const findingsByKey = new Map(result.findings.map((finding) => [finding.key, finding]))
-  const signalTags = deriveSignalTags(result)
   const summary = buildScanSummary(result)
   const exitCode = result.suspicious_count > 0 ? 1 : 0
   const showOverallRisk = shouldRenderOverallRisk(result)
@@ -106,19 +105,11 @@ function ScanResultView({ result }: { result: ScanResult }): React.JSX.Element {
             <Text color="gray">OVERALL RISK</Text>
             <RiskBar score={result.overall_risk_score} />
             <Text color={riskColor(result.overall_risk_level)}>
-              {`${formatOverallRiskLabel(result.overall_risk_level)} · ${result.overall_risk_score.toFixed(2)}`}
+              {`${formatPresentedRiskLevel(result.overall_risk_level)} · ${result.overall_risk_score.toFixed(2)}`}
             </Text>
           </Box>
         ) : null}
       </Box>
-
-      {signalTags.length > 0 ? (
-        <Box marginTop={1} flexWrap="wrap">
-          {signalTags.map((tag) => (
-            <StatusChip key={tag} label={tag} color="blueBright" />
-          ))}
-        </Box>
-      ) : null}
 
       <Box marginTop={1}>
         <Text color="gray">Process exited with code </Text>
@@ -203,15 +194,24 @@ function TreeRow({
   prefix: string
   finding: ScanFinding | undefined
 }): React.JSX.Element {
-  const emphatic = finding !== undefined || node.risk_level === 'critical'
+  const isRootNode = node.depth === 0
+  const isActiveFinding = finding !== undefined
+  const nameColor = isActiveFinding
+    ? 'white'
+    : isRootNode
+      ? 'white'
+      : node.risk_level === 'safe'
+        ? 'gray'
+        : riskColor(node.risk_level)
 
   return (
     <Box alignItems="center">
-      <Text color={emphatic ? 'red' : 'blue'}>{prefix}</Text>
-      <Text bold={emphatic} color={emphatic ? 'redBright' : 'white'}>
+      <Text color={isActiveFinding ? 'red' : 'blue'}>{prefix}</Text>
+      <Text bold={isRootNode || isActiveFinding} color={nameColor}>
         {node.name}
       </Text>
       <Text color="gray">{`@${node.version}`}</Text>
+      {isRootNode ? <Text color="gray">{' · scanned package'}</Text> : null}
       {node.is_project_root ? <Text color="gray">{' · project root'}</Text> : null}
       {node.metadata_status === 'unresolved_registry_lookup' ? (
         <Text color="yellow">{' · registry metadata unavailable'}</Text>
@@ -263,9 +263,9 @@ function FindingPanel({
   const reasons = formatFindingReasons(finding)
   const findingKind = isSecurityRelatedFinding(finding) ? 'PRIORITY FINDING' : 'ROUTINE FINDING'
   const details: Array<[string, string, string]> = [
-    ['age', formatAge(node.age_days), 'redBright'],
-    ['downloads', formatDownloads(node.weekly_downloads, node.is_security_tombstone), 'redBright'],
-    ['versions', formatPublishedVersions(node.total_versions), 'yellowBright'],
+    ['package age', formatAge(node.age_days), 'redBright'],
+    ['weekly downloads', formatDownloads(node.weekly_downloads, node.is_security_tombstone), 'redBright'],
+    ['total versions', formatPublishedVersions(node.total_versions), 'yellowBright'],
     ['risk score', `${finding.risk_score.toFixed(2)} (threshold: ${threshold.toFixed(2)})`, 'redBright'],
   ]
 
@@ -295,17 +295,20 @@ function FindingPanel({
         {details.map(([label, value, color]) => (
           <Box key={label}>
             <Text color="redBright">{'• '}</Text>
-            <Text color="gray">{`${label.padEnd(11)}`}</Text>
+            <Text color="gray">{`${label.padEnd(16)}`}</Text>
             <Text color={color}>{value}</Text>
           </Box>
         ))}
-        {reasons.map((reason) => (
-          <Box key={reason}>
-            <Text color="redBright">{'• '}</Text>
-            <Text color="gray">{'reason'.padEnd(11)}</Text>
-            <Text color="yellowBright">{reason}</Text>
+        {reasons.length > 0 ? (
+          <Box flexDirection="column" marginTop={1}>
+            {reasons.map((reason) => (
+              <Box key={reason}>
+                <Text color="redBright">{'• '}</Text>
+                <Text color="yellowBright">{reason}</Text>
+              </Box>
+            ))}
           </Box>
-        ))}
+        ) : null}
       </Box>
     </Box>
   )
@@ -316,9 +319,9 @@ function RiskBadge({ level }: { level: RiskLevel }): React.JSX.Element {
 
   return (
     <Box marginLeft={1}>
-      <Text bold color={color} backgroundColor={riskBadgeBackground(level)}>
-        {` ${level === 'critical' ? 'suspicious' : riskLabel(level)} `}
-      </Text>
+      <Text color="gray">[</Text>
+      <Text bold color={color}>{formatPresentedRiskLevel(level)}</Text>
+      <Text color="gray">]</Text>
     </Box>
   )
 }
@@ -360,20 +363,6 @@ function MetricBlock({
         {value}
       </Text>
       <Text color="gray">{label}</Text>
-    </Box>
-  )
-}
-
-function StatusChip({
-  label,
-  color,
-}: {
-  label: string
-  color: string
-}): React.JSX.Element {
-  return (
-    <Box borderStyle="round" borderColor="blue" paddingX={1} marginRight={1}>
-      <Text color="blueBright">{label}</Text>
     </Box>
   )
 }
@@ -420,55 +409,18 @@ function riskColor(level: RiskLevel): string {
   }
 }
 
-function riskBadgeBackground(level: RiskLevel): string {
-  switch (level) {
-    case 'critical':
-      return '#3a1717'
-    case 'review':
-      return '#3b2c10'
-    default:
-      return '#173420'
-  }
+function riskLabel(level: RiskLevel): string {
+  return formatPresentedRiskLevel(level)
 }
 
-function riskLabel(level: RiskLevel): string {
+export function formatPresentedRiskLevel(level: RiskLevel): string {
   switch (level) {
     case 'critical':
-      return 'suspicious'
+      return 'critical'
     case 'review':
       return 'review'
     default:
       return 'safe'
-  }
-}
-
-function formatOverallRiskLabel(level: RiskLevel): string {
-  switch (level) {
-    case 'critical':
-      return 'HIGH'
-    case 'review':
-      return 'MEDIUM'
-    default:
-      return 'LOW'
-  }
-}
-
-function formatSignalLabel(type: string): string {
-  switch (type) {
-    case 'unresolved_registry_lookup':
-      return 'registry metadata unavailable'
-    case 'security_tombstone':
-      return 'security tombstone'
-    case 'new_and_unproven':
-      return 'zero provenance'
-    case 'new_package_age':
-      return 'new publisher'
-    case 'zero_downloads':
-      return 'zero downloads'
-    case 'deprecated_package':
-      return 'deprecated package'
-    default:
-      return type.replaceAll('_', ' ')
   }
 }
 
@@ -493,7 +445,7 @@ function formatPublishedVersions(totalVersions: number | null): string {
     return 'n/a'
   }
 
-  return `${totalVersions} published`
+  return `${totalVersions}`
 }
 
 function formatDownloads(downloads: number | null, isSecurityTombstone: boolean): string {
@@ -510,23 +462,6 @@ function formatDownloads(downloads: number | null, isSecurityTombstone: boolean)
 
 export function shouldRenderOverallRisk(result: Pick<ScanResult, 'suspicious_count'>): boolean {
   return result.suspicious_count > 0
-}
-
-export function deriveSignalTags(result: Pick<ScanResult, 'findings'>): string[] {
-  const tags = new Set<string>()
-
-  if (result.findings.some((finding) => finding.depth === 1)) {
-    tags.add('depth-1 threat')
-  }
-
-  // Footer tags should only summarize visible findings, not low-weight signals from otherwise safe packages.
-  for (const finding of result.findings) {
-    for (const signal of finding.signals) {
-      tags.add(formatSignalLabel(signal.type))
-    }
-  }
-
-  return Array.from(tags).slice(0, 6)
 }
 
 export async function renderInk(result: ScanResult): Promise<void> {
