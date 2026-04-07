@@ -175,7 +175,6 @@ See the roadmap for what's coming.
 ### Coming Soon
 
 - [ ] yarn lockfile support
-- [ ] advisory database integration
 - [ ] sensitive import analysis
 - [ ] explain command
 - [ ] CI/CD GitHub Action

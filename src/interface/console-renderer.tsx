@@ -3,7 +3,12 @@ import { Box, Text, render, useApp } from 'ink'
 
 import type { EdgeFinding } from '../domain/contracts.js'
 import type { PackageNode, RiskLevel, RiskSignal, ScanFinding, ScanResult } from '../domain/entities.js'
-import { getFieldReliabilityPolicySummary } from './field-reliability-summary.js'
+import {
+  buildScanSummary,
+  formatEdgeFindingReason,
+  formatFindingReasons,
+  isSecurityRelatedFinding,
+} from './scan-output-presenter.js'
 
 const DIVIDER = '─'.repeat(92)
 const PANEL_WIDTH = 88
@@ -24,6 +29,7 @@ function ScanResultView({ result }: { result: ScanResult }): React.JSX.Element {
   const findingsByKey = new Map(result.findings.map((finding) => [finding.key, finding]))
   const allSignals = collectSignals(result.root)
   const signalTags = deriveSignalTags(result, allSignals)
+  const summary = buildScanSummary(result)
   const exitCode = result.suspicious_count > 0 ? 1 : 0
 
   return (
@@ -52,19 +58,18 @@ function ScanResultView({ result }: { result: ScanResult }): React.JSX.Element {
         <Text bold color="white">
           {result.root.key}
           <Text color="gray">
-            {` · mode: ${result.scan_mode} · depth: ${result.requested_depth} · visited: ${result.total_scanned}`}
+            {` · depth: ${result.requested_depth} · visited: ${result.total_scanned}`}
           </Text>
         </Text>
       </Box>
 
       <Box flexDirection="column" marginBottom={1}>
+        <SummaryPanel result={summary} />
         {result.warnings.length > 0 ? <WarningsPanel warnings={result.warnings} /> : null}
 
         {result.edge_findings.length > 0 ? (
           <ChangedEdgesPanel edgeFindings={result.edge_findings} />
         ) : null}
-
-        <FieldReliabilityPolicyPanel result={result} />
 
         {flattenTree(result.root).map((row) => (
           <React.Fragment key={row.node.key}>
@@ -135,15 +140,14 @@ function ChangedEdgesPanel({ edgeFindings }: { edgeFindings: EdgeFinding[] }): R
         paddingY={0}
         width={PANEL_WIDTH}
       >
-        <Text color="gray">CHANGED EDGES IN CURRENT TREE VIEW</Text>
-        <Text color="gray">current resolved view from registry metadata</Text>
+        <Text color="gray">CHANGED DEPENDENCIES</Text>
         {edgeFindings.map((edgeFinding) => (
           <Box key={`${edgeFinding.parent_key}->${edgeFinding.child_key}`} flexDirection="column" marginBottom={1}>
             <Text color="yellowBright">
               {`${edgeFinding.parent_key} -> ${edgeFinding.child_key} [${edgeFinding.edge_type}]`}
             </Text>
             <Text color="gray">{edgeFinding.path.join(' > ')}</Text>
-            <Text color="white">{edgeFinding.reason}</Text>
+            <Text color="white">{formatEdgeFindingReason(edgeFinding)}</Text>
           </Box>
         ))}
       </Box>
@@ -151,27 +155,39 @@ function ChangedEdgesPanel({ edgeFindings }: { edgeFindings: EdgeFinding[] }): R
   )
 }
 
-function FieldReliabilityPolicyPanel({ result }: { result: ScanResult }): React.JSX.Element {
-  const lines = getFieldReliabilityPolicySummary(result)
-
+function SummaryPanel({
+  result,
+}: {
+  result: ReturnType<typeof buildScanSummary>
+}): React.JSX.Element {
   return (
     <Box marginBottom={1}>
       <Box
         flexDirection="column"
         borderStyle="single"
-        borderColor="cyan"
+        borderColor="green"
         paddingX={1}
         paddingY={0}
         width={PANEL_WIDTH}
       >
-        <Text color="gray">{`FIELD RELIABILITY POLICY · ${result.field_reliability.adr}`}</Text>
-        {lines.map((line) => (
-          <Box key={line}>
-            <Text color="cyanBright">{'• '}</Text>
-            <Text color="white">{line}</Text>
-          </Box>
-        ))}
+        <Text color="gray">SUMMARY</Text>
+        <MetricLine label="Packages requiring review" value={String(result.packages_requiring_review)} />
+        <MetricLine
+          label="Findings with security-related signals"
+          value={String(result.security_related_findings)}
+        />
+        <MetricLine label="Packages that appear safe" value={String(result.packages_appearing_safe)} />
       </Box>
+    </Box>
+  )
+}
+
+function MetricLine({ label, value }: { label: string; value: string }): React.JSX.Element {
+  return (
+    <Box>
+      <Text color="greenBright">{'• '}</Text>
+      <Text color="gray">{`${label}: `}</Text>
+      <Text color="white">{value}</Text>
     </Box>
   )
 }
@@ -242,6 +258,8 @@ function FindingPanel({
   finding: ScanFinding
   threshold: number
 }): React.JSX.Element {
+  const reasons = formatFindingReasons(finding)
+  const findingKind = isSecurityRelatedFinding(finding) ? 'PRIORITY FINDING' : 'ROUTINE FINDING'
   const details: Array<[string, string, string]> = [
     ['age', formatAge(node.age_days), 'redBright'],
     ['downloads', formatDownloads(node.weekly_downloads, node.is_security_tombstone), 'redBright'],
@@ -261,10 +279,6 @@ function FindingPanel({
     ])
   }
 
-  if (node.deprecated_message !== null) {
-    details.push(['deprecation', node.deprecated_message, 'yellowBright'])
-  }
-
   return (
     <Box marginLeft={4} marginBottom={1}>
       <Box
@@ -275,6 +289,7 @@ function FindingPanel({
         paddingY={0}
         width={PANEL_WIDTH - 4}
       >
+        <Text color="gray">{findingKind}</Text>
         {details.map(([label, value, color]) => (
           <Box key={label}>
             <Text color="redBright">{'• '}</Text>
@@ -282,11 +297,13 @@ function FindingPanel({
             <Text color={color}>{value}</Text>
           </Box>
         ))}
-        <Box>
-          <Text color="redBright">{'• '}</Text>
-          <Text color="gray">{'signals'.padEnd(11)}</Text>
-          <Text color="yellowBright">{finding.signals.map((signal) => formatSignalLabel(signal.type)).join(' · ')}</Text>
-        </Box>
+        {reasons.map((reason) => (
+          <Box key={reason}>
+            <Text color="redBright">{'• '}</Text>
+            <Text color="gray">{'reason'.padEnd(11)}</Text>
+            <Text color="yellowBright">{reason}</Text>
+          </Box>
+        ))}
       </Box>
     </Box>
   )

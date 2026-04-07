@@ -1,23 +1,32 @@
 import type { PackageNode, ScanResult } from '../domain/entities.js'
-import { getFieldReliabilityPolicySummary } from './field-reliability-summary.js'
+import {
+  buildScanSummary,
+  formatEdgeFindingReason,
+  formatFindingReasons,
+  partitionFindings,
+} from './scan-output-presenter.js'
 
 export function renderPlainText(result: ScanResult): string {
+  const summary = buildScanSummary(result)
+  const findings = partitionFindings(result.findings)
   const lines = [
     `Scan: ${result.root.key}`,
-    `Mode: ${result.scan_mode}`,
     `Target: ${result.scan_target}`,
     `Record: ${result.record_id}`,
     `Overall risk: ${result.overall_risk_level} (${result.overall_risk_score.toFixed(2)})`,
-    `Total scanned: ${result.total_scanned}`,
-    `Suspicious packages: ${result.suspicious_count}`,
-    `Warnings: ${result.warnings.length}`,
     '',
-    'Warnings:',
+    'Summary:',
+    `- Packages scanned: ${result.total_scanned}`,
+    `- Packages requiring review: ${summary.packages_requiring_review}`,
+    `- Findings with security-related signals: ${summary.security_related_findings}`,
+    `- Packages that appear safe: ${summary.packages_appearing_safe}`,
+    '',
+    `Warnings: ${result.warnings.length}`,
   ]
 
-  if (result.warnings.length === 0) {
-    lines.push('- none')
-  } else {
+  if (result.warnings.length > 0) {
+    lines.push('', 'Warnings:')
+
     for (const warning of result.warnings) {
       lines.push(`- ${warning.package_key} [${warning.kind}] ${warning.message}`)
 
@@ -29,13 +38,7 @@ export function renderPlainText(result: ScanResult): string {
 
   lines.push(
     '',
-    `Field reliability policy (${result.field_reliability.adr}):`,
-  )
-  lines.push(...getFieldReliabilityPolicySummary(result).map((line) => `- ${line}`))
-
-  lines.push(
-    '',
-    'Changed edges in current tree view:',
+    'Changed dependencies:',
   )
 
   if (result.edge_findings.length === 0) {
@@ -43,34 +46,53 @@ export function renderPlainText(result: ScanResult): string {
   } else {
     for (const edgeFinding of result.edge_findings) {
       lines.push(
-        `- ${edgeFinding.parent_key} -> ${edgeFinding.child_key} [${edgeFinding.edge_type}] via ${edgeFinding.path.join(' > ')}`,
+        `- ${edgeFinding.parent_key} -> ${edgeFinding.child_key} [${edgeFinding.edge_type}]`,
       )
-      lines.push(`  target: ${edgeFinding.review_target.target_id}`)
-      lines.push(`  explanation: ${edgeFinding.reason}`)
+      lines.push(`  Path: ${edgeFinding.path.join(' > ')}`)
+      lines.push(`  Target: ${edgeFinding.review_target.target_id}`)
+      lines.push(`  Reason: ${formatEdgeFindingReason(edgeFinding)}`)
     }
   }
 
   lines.push(
     '',
-    'Findings:',
+    'Priority findings:',
   )
 
-  if (result.findings.length === 0) {
+  if (findings.priority.length === 0) {
     lines.push('- none')
   } else {
-    for (const finding of result.findings) {
-      lines.push(
-        `- ${finding.key} [${finding.risk_level} ${finding.risk_score.toFixed(2)}] via ${formatPath(finding.path.packages)}`,
-      )
-      lines.push(`  target: ${finding.review_target.target_id}`)
-      lines.push(`  explanation: ${finding.explanation}`)
-    }
+    lines.push(...renderFindings(findings.priority))
   }
 
-  lines.push('', 'Current tree view:')
+  lines.push('', 'Routine findings:')
+
+  if (findings.routine.length === 0) {
+    lines.push('- none')
+  } else {
+    lines.push(...renderFindings(findings.routine))
+  }
+
+  lines.push('', 'Dependency tree:')
   lines.push(...renderTree(result.root))
 
   return lines.join('\n')
+}
+
+function renderFindings(findings: ScanResult['findings']): string[] {
+  const lines: string[] = []
+
+  for (const finding of findings) {
+    lines.push(`- ${finding.key} [${finding.risk_level} ${finding.risk_score.toFixed(2)}]`)
+    lines.push(`  Path: ${formatPath(finding.path.packages)}`)
+    lines.push(`  Target: ${finding.review_target.target_id}`)
+
+    for (const reason of formatFindingReasons(finding)) {
+      lines.push(`  - ${reason}`)
+    }
+  }
+
+  return lines
 }
 
 function renderTree(node: PackageNode, prefix = '', isLast = true): string[] {
