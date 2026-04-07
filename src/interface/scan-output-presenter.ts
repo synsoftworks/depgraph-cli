@@ -15,11 +15,33 @@ export interface ScanSummaryBlock {
   packages_appearing_safe: number
 }
 
+export interface CompactScanSummary {
+  scanned_package: string
+  overall_risk_level: ScanResult['overall_risk_level']
+  overall_risk_score: number
+  packages_requiring_review: number
+  security_related_findings: number
+  packages_appearing_safe: number
+}
+
 export function buildScanSummary(result: ScanResult): ScanSummaryBlock {
   return {
     packages_requiring_review: result.suspicious_count,
     security_related_findings: result.findings.filter(isSecurityRelatedFinding).length,
     packages_appearing_safe: result.safe_count,
+  }
+}
+
+export function buildCompactScanSummary(result: ScanResult): CompactScanSummary {
+  const summary = buildScanSummary(result)
+
+  return {
+    scanned_package: result.root.key,
+    overall_risk_level: result.overall_risk_level,
+    overall_risk_score: result.overall_risk_score,
+    packages_requiring_review: summary.packages_requiring_review,
+    security_related_findings: summary.security_related_findings,
+    packages_appearing_safe: summary.packages_appearing_safe,
   }
 }
 
