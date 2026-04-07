@@ -25,7 +25,7 @@ npm install -g @synsoftworks/depgraph-cli
 Run without installing:
 
 ```bash
-npx -p @synsoftworks/depgraph-cli depgraph --help
+npx @synsoftworks/depgraph-cli scan axios
 ```
 
 ## Quick Start

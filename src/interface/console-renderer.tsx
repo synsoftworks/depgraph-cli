@@ -2,7 +2,7 @@ import React, { useEffect } from 'react'
 import { Box, Text, render, useApp } from 'ink'
 
 import type { EdgeFinding } from '../domain/contracts.js'
-import type { PackageNode, RiskLevel, RiskSignal, ScanFinding, ScanResult } from '../domain/entities.js'
+import type { PackageNode, RiskLevel, ScanFinding, ScanResult } from '../domain/entities.js'
 import {
   buildScanSummary,
   formatEdgeFindingReason,
@@ -27,10 +27,10 @@ function AutoExit(): React.JSX.Element | null {
 
 function ScanResultView({ result }: { result: ScanResult }): React.JSX.Element {
   const findingsByKey = new Map(result.findings.map((finding) => [finding.key, finding]))
-  const allSignals = collectSignals(result.root)
-  const signalTags = deriveSignalTags(result, allSignals)
+  const signalTags = deriveSignalTags(result)
   const summary = buildScanSummary(result)
   const exitCode = result.suspicious_count > 0 ? 1 : 0
+  const showOverallRisk = shouldRenderOverallRisk(result)
 
   return (
     <Box flexDirection="column" paddingX={1}>
@@ -91,7 +91,7 @@ function ScanResultView({ result }: { result: ScanResult }): React.JSX.Element {
 
       <Text color="gray">{DIVIDER}</Text>
 
-      <Box marginTop={1} justifyContent="space-between">
+      <Box marginTop={1} justifyContent={showOverallRisk ? 'space-between' : 'flex-start'}>
         <Box>
           <MetricBlock value={String(result.total_scanned)} label="PACKAGES SCANNED" color="greenBright" />
           <MetricBlock
@@ -101,13 +101,15 @@ function ScanResultView({ result }: { result: ScanResult }): React.JSX.Element {
           />
           <MetricBlock value={String(result.safe_count)} label="SAFE" color="greenBright" />
         </Box>
-        <Box flexDirection="column" width={42}>
-          <Text color="gray">OVERALL RISK</Text>
-          <RiskBar score={result.overall_risk_score} level={result.overall_risk_level} />
-          <Text color={riskColor(result.overall_risk_level)}>
-            {`${formatOverallRiskLabel(result.overall_risk_level)} · ${result.overall_risk_score.toFixed(2)}`}
-          </Text>
-        </Box>
+        {showOverallRisk ? (
+          <Box flexDirection="column" width={42}>
+            <Text color="gray">OVERALL RISK</Text>
+            <RiskBar score={result.overall_risk_score} />
+            <Text color={riskColor(result.overall_risk_level)}>
+              {`${formatOverallRiskLabel(result.overall_risk_level)} · ${result.overall_risk_score.toFixed(2)}`}
+            </Text>
+          </Box>
+        ) : null}
       </Box>
 
       {signalTags.length > 0 ? (
@@ -204,7 +206,7 @@ function TreeRow({
   const emphatic = finding !== undefined || node.risk_level === 'critical'
 
   return (
-    <Box>
+    <Box alignItems="center">
       <Text color={emphatic ? 'red' : 'blue'}>{prefix}</Text>
       <Text bold={emphatic} color={emphatic ? 'redBright' : 'white'}>
         {node.name}
@@ -313,14 +315,9 @@ function RiskBadge({ level }: { level: RiskLevel }): React.JSX.Element {
   const color = riskColor(level)
 
   return (
-    <Box
-      borderStyle="round"
-      borderColor={color}
-      paddingX={1}
-      marginLeft={1}
-    >
-      <Text color={color}>
-        {level === 'critical' ? ' suspicious ' : ` ${riskLabel(level)} `}
+    <Box marginLeft={1}>
+      <Text bold color={color} backgroundColor={riskBadgeBackground(level)}>
+        {` ${level === 'critical' ? 'suspicious' : riskLabel(level)} `}
       </Text>
     </Box>
   )
@@ -328,10 +325,8 @@ function RiskBadge({ level }: { level: RiskLevel }): React.JSX.Element {
 
 function RiskBar({
   score,
-  level,
 }: {
   score: number
-  level: RiskLevel
 }): React.JSX.Element {
   const total = 28
   const filled = Math.max(0, Math.min(total, Math.round(score * total)))
@@ -341,12 +336,12 @@ function RiskBar({
   const high = Math.max(filled - low - medium, 0)
 
   return (
-    <Text>
-      <Text color="greenBright">{'█'.repeat(low)}</Text>
-      <Text color="yellowBright">{'█'.repeat(medium)}</Text>
-      <Text color="redBright">{'█'.repeat(high)}</Text>
-      <Text color="#2c3243">{'█'.repeat(empty)}</Text>
-    </Text>
+    <Box>
+      {low > 0 ? <Text color="greenBright">{'█'.repeat(low)}</Text> : null}
+      {medium > 0 ? <Text color="yellowBright">{'█'.repeat(medium)}</Text> : null}
+      {high > 0 ? <Text color="redBright">{'█'.repeat(high)}</Text> : null}
+      {empty > 0 ? <Text color="#2c3243">{'█'.repeat(empty)}</Text> : null}
+    </Box>
   )
 }
 
@@ -414,14 +409,6 @@ function buildTreePrefix(ancestors: boolean[]): string {
   return `${branchPrefix}${connector}`
 }
 
-function collectSignals(node: PackageNode): RiskSignal[] {
-  return [node.signals, ...node.dependencies.map(collectSignals)].flat()
-}
-
-function getMaxDepth(node: PackageNode): number {
-  return Math.max(node.depth, ...node.dependencies.map(getMaxDepth), 0)
-}
-
 function riskColor(level: RiskLevel): string {
   switch (level) {
     case 'critical':
@@ -430,6 +417,17 @@ function riskColor(level: RiskLevel): string {
       return 'yellowBright'
     default:
       return 'greenBright'
+  }
+}
+
+function riskBadgeBackground(level: RiskLevel): string {
+  switch (level) {
+    case 'critical':
+      return '#3a1717'
+    case 'review':
+      return '#3b2c10'
+    default:
+      return '#173420'
   }
 }
 
@@ -510,15 +508,22 @@ function formatDownloads(downloads: number | null, isSecurityTombstone: boolean)
   return `${downloads.toLocaleString()} / week`
 }
 
-function deriveSignalTags(result: ScanResult, signals: RiskSignal[]): string[] {
+export function shouldRenderOverallRisk(result: Pick<ScanResult, 'suspicious_count'>): boolean {
+  return result.suspicious_count > 0
+}
+
+export function deriveSignalTags(result: Pick<ScanResult, 'findings'>): string[] {
   const tags = new Set<string>()
 
   if (result.findings.some((finding) => finding.depth === 1)) {
     tags.add('depth-1 threat')
   }
 
-  for (const signal of signals) {
-    tags.add(formatSignalLabel(signal.type))
+  // Footer tags should only summarize visible findings, not low-weight signals from otherwise safe packages.
+  for (const finding of result.findings) {
+    for (const signal of finding.signals) {
+      tags.add(formatSignalLabel(signal.type))
+    }
   }
 
   return Array.from(tags).slice(0, 6)

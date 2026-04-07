@@ -1,5 +1,7 @@
 import type { ScanResult } from '../domain/entities.js'
 
 export function renderJson(result: ScanResult): string {
-  return JSON.stringify(result, null, 2)
+  const { field_reliability: _fieldReliability, ...publicResult } = result
+
+  return JSON.stringify(publicResult, null, 2)
 }

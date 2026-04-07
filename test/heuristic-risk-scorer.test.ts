@@ -82,6 +82,81 @@ test('heuristic scorer flags zero-download injection pattern aggressively', () =
   assert.ok(result.signals.some((signal) => signal.type === 'new_and_unproven'))
 })
 
+test('heuristic scorer dampens freshness for mature high-download packages', () => {
+  const scorer = new HeuristicRiskScorer(() => NOW)
+  const metadata = createMetadata({
+    package: {
+      name: 'caniuse-lite',
+      version: '1.0.30001786',
+    },
+    published_at: '2026-03-31T00:00:00.000Z',
+    first_published_at: '2017-01-27T00:00:00.000Z',
+    last_published_at: '2026-03-31T00:00:00.000Z',
+    total_versions: 945,
+    weekly_downloads: 138_941_698,
+    publish_events_last_30_days: 8,
+  })
+
+  const result = scorer.assessPackage(metadata, {
+    depth: 0,
+    path: {
+      packages: [{ name: 'caniuse-lite', version: '1.0.30001786' }],
+    },
+    dependency_count: 0,
+  })
+
+  assert.equal(result.risk_level, 'safe')
+  assert.equal(result.risk_score, 0.24)
+  assert.ok(!result.signals.some((signal) => signal.type === 'new_package_age'))
+  assert.ok(result.signals.some((signal) => signal.type === 'fresh_release_on_mature_package'))
+  assert.ok(result.signals.some((signal) => signal.type === 'rapid_publish_churn'))
+})
+
+test('heuristic scorer keeps the existing freshness signal for genuinely new packages', () => {
+  const scorer = new HeuristicRiskScorer(() => NOW)
+  const metadata = createMetadata({
+    published_at: '2026-03-31T00:00:00.000Z',
+    total_versions: 2,
+    weekly_downloads: 500,
+  })
+
+  const result = scorer.assessPackage(metadata, {
+    depth: 1,
+    path: {
+      packages: [
+        { name: 'root', version: '1.0.0' },
+        { name: 'risky-package', version: '1.0.0' },
+      ],
+    },
+    dependency_count: 0,
+  })
+
+  assert.ok(result.signals.some((signal) => signal.type === 'new_package_age'))
+  assert.ok(!result.signals.some((signal) => signal.type === 'fresh_release_on_mature_package'))
+})
+
+test('heuristic scorer does not dampen freshness when weekly downloads are unknown', () => {
+  const scorer = new HeuristicRiskScorer(() => NOW)
+  const metadata = createMetadata({
+    published_at: '2026-03-31T00:00:00.000Z',
+    total_versions: 945,
+    weekly_downloads: null,
+    publish_events_last_30_days: 0,
+  })
+
+  const result = scorer.assessPackage(metadata, {
+    depth: 0,
+    path: {
+      packages: [{ name: 'risky-package', version: '1.0.0' }],
+    },
+    dependency_count: 0,
+  })
+
+  assert.equal(result.risk_score, 0.32)
+  assert.ok(result.signals.some((signal) => signal.type === 'new_package_age'))
+  assert.ok(!result.signals.some((signal) => signal.type === 'fresh_release_on_mature_package'))
+})
+
 test('heuristic scorer treats security tombstones as critical regardless of inherited download counts', () => {
   const scorer = new HeuristicRiskScorer(() => NOW)
   const metadata = createMetadata({

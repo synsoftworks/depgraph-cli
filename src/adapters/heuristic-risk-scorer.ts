@@ -9,6 +9,9 @@ import {
   riskLevelForScore,
 } from '../domain/value-objects.js'
 
+const MATURE_PACKAGE_VERSION_THRESHOLD = 100
+const MATURE_PACKAGE_DOWNLOAD_THRESHOLD = 100_000
+
 export class HeuristicRiskScorer implements RiskScorer {
   constructor(private readonly now: () => Date = () => new Date()) {}
 
@@ -18,12 +21,22 @@ export class HeuristicRiskScorer implements RiskScorer {
     const dependencyCount = context.dependency_count
 
     if (ageDays <= 7) {
-      signals.push({
-        type: 'new_package_age',
-        value: ageDays,
-        weight: 'high',
-        reason: `package was published ${ageDays} day(s) ago`,
-      })
+      if (isFreshReleaseOnMaturePackage(metadata)) {
+        // Mature packages still get a freshness signal, but strong adoption and long version history dampen the default suspicion.
+        signals.push({
+          type: 'fresh_release_on_mature_package',
+          value: ageDays,
+          weight: 'low',
+          reason: `package was published ${ageDays} day(s) ago on a mature, high-traffic package`,
+        })
+      } else {
+        signals.push({
+          type: 'new_package_age',
+          value: ageDays,
+          weight: 'high',
+          reason: `package was published ${ageDays} day(s) ago`,
+        })
+      }
     }
 
     if (metadata.total_versions <= 2) {
@@ -122,4 +135,12 @@ export class HeuristicRiskScorer implements RiskScorer {
       signals,
     }
   }
+}
+
+function isFreshReleaseOnMaturePackage(metadata: PackageMetadata): boolean {
+  return (
+    metadata.total_versions >= MATURE_PACKAGE_VERSION_THRESHOLD &&
+    metadata.weekly_downloads !== null &&
+    metadata.weekly_downloads >= MATURE_PACKAGE_DOWNLOAD_THRESHOLD
+  )
 }

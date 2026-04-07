@@ -137,7 +137,6 @@ test('scan JSON contract remains stable and deterministic', () => {
     'baseline_record_id',
     'requested_depth',
     'threshold',
-    'field_reliability',
     'root',
     'edge_findings',
     'findings',
@@ -201,8 +200,7 @@ test('scan JSON contract remains stable and deterministic', () => {
     recommendation: 'review',
   })
   assert.equal(parsed.findings[0].key, 'child@1.0.0')
-  assert.equal(parsed.field_reliability.adr, 'ADR-012')
-  assert.equal(parsed.field_reliability.fields['package_node.weekly_downloads'].tier, 'conditionally_reliable')
+  assert.equal(parsed.field_reliability, undefined)
   assert.equal(parsed.findings[0].review_target.target_id, 'package_finding:child@1.0.0')
   assert.equal(parsed.findings[0].signals[0].type, 'test_signal')
   assert.equal(parsed.root.metadata_status, 'enriched')
