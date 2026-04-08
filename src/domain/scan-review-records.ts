@@ -37,6 +37,8 @@ export function normalizeScanReviewRecord(record: StoredScanReviewRecord): ScanR
   // Older records can omit package identity fields, so downstream consumers normalize from the root node first.
   const root = normalizePackageNode(record.root)
   const scanMode = record.scan_mode ?? baselineIdentity.scan_mode
+  const findings = (record.findings ?? []).map((finding) => normalizeScanFinding(record.record_id, finding))
+  const primaryFindingKey = resolvePrimaryFindingKey(record.primary_finding_key, findings)
 
   return {
     ...record,
@@ -49,10 +51,11 @@ export function normalizeScanReviewRecord(record: StoredScanReviewRecord): ScanR
       },
     package_key: record.package_key ?? packageKey(record.package ?? root),
     scan_target: record.scan_target ?? baselineIdentity.scan_target,
+    ...(primaryFindingKey !== undefined ? { primary_finding_key: primaryFindingKey } : {}),
     baseline_identity: baselineIdentity,
     baseline_key: baselineKeyForIdentity(baselineIdentity),
     warnings: record.warnings ?? [],
-    findings: (record.findings ?? []).map((finding) => normalizeScanFinding(record.record_id, finding)),
+    findings,
     edge_findings: getStoredEdgeFindings(record).map((edgeFinding) =>
       normalizeEdgeFinding(record.record_id, edgeFinding),
     ),
@@ -108,4 +111,21 @@ function deriveScanTarget(record: StoredScanReviewRecord): string {
 function getStoredEdgeFindings(record: StoredScanReviewRecord): ScanReviewRecord['edge_findings'] {
   // Legacy records used the earlier field name; both are accepted during normalization.
   return record.edge_findings ?? record.new_dependency_edge_findings ?? []
+}
+
+function resolvePrimaryFindingKey(
+  storedPrimaryFindingKey: string | undefined,
+  findings: ScanReviewRecord['findings'],
+): string | undefined {
+  if (typeof storedPrimaryFindingKey === 'string' && storedPrimaryFindingKey.length > 0) {
+    return storedPrimaryFindingKey
+  }
+
+  const primaryFinding = findings[0]
+
+  if (primaryFinding !== undefined && primaryFinding.depth > 0) {
+    return primaryFinding.key
+  }
+
+  return undefined
 }

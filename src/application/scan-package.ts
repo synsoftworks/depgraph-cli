@@ -509,6 +509,8 @@ function buildScanReviewRecord({
     name: result.root.name,
     version: result.root.version,
   }
+  const primaryFinding = result.findings[0]
+  const hasTransitivePrimaryFinding = primaryFinding !== undefined && primaryFinding.depth > 0
 
   return {
     record_id: result.record_id,
@@ -517,6 +519,7 @@ function buildScanReviewRecord({
     package: pkg,
     package_key: packageKey(pkg),
     scan_target: result.scan_target,
+    ...(hasTransitivePrimaryFinding ? { primary_finding_key: primaryFinding.key } : {}),
     baseline_identity: baselineIdentity,
     baseline_key: baselineKey,
     baseline_record_id: baselineRecordId,
@@ -525,7 +528,7 @@ function buildScanReviewRecord({
     field_reliability: result.field_reliability,
     raw_score: result.overall_risk_score,
     risk_level: result.overall_risk_level,
-    signals: result.root.signals,
+    signals: hasTransitivePrimaryFinding ? [] : result.root.signals,
     findings: result.findings,
     root: result.root,
     total_scanned: result.total_scanned,

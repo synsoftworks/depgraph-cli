@@ -91,6 +91,27 @@ class StubScorer implements RiskScorer {
   }
 }
 
+class FixtureRiskScorer implements RiskScorer {
+  constructor(
+    private readonly assessments: Record<string, ReturnType<StubScorer['assessPackage']>>,
+  ) {}
+
+  assessPackage(metadata: PackageMetadata) {
+    const assessment = this.assessments[`${metadata.package.name}@${metadata.package.version}`]
+
+    if (assessment === undefined) {
+      return {
+        risk_score: 0,
+        risk_level: 'safe' as const,
+        recommendation: 'install' as const,
+        signals: [],
+      }
+    }
+
+    return assessment
+  }
+}
+
 class InMemoryReviewStore implements ScanReviewStore {
   records: ScanReviewRecord[]
   reviewEvents: ReviewEvent[] = []
@@ -531,6 +552,7 @@ test('scan use case persists a durable scan review record after the scan complet
     package: { name: 'root', version: '1.0.0' },
     package_key: 'root@1.0.0',
     scan_target: 'root',
+    primary_finding_key: 'child@1.0.0',
     baseline_identity: {
       scan_mode: 'registry_package',
       scan_target: 'root',
@@ -656,6 +678,219 @@ test('scan use case persists a durable scan review record after the scan complet
     ],
     edge_findings: [],
   })
+})
+
+test('persisted scan record clears top-level signals and stores primary_finding_key when the primary finding is transitive', async () => {
+  const reviewStore = new InMemoryReviewStore()
+
+  const scanPackage = createScanPackageUseCase({
+    registryTraverser: new StubRegistryTraverser({
+      root_key: 'express@5.2.1',
+      nodes: [
+        {
+          key: 'express@5.2.1',
+          package: { name: 'express', version: '5.2.1' },
+          metadata: createMetadata('express', '5.2.1'),
+          resolved_dependencies: Object.fromEntries(
+            Array.from({ length: 25 }, (_, index) => [`dep-${index}`, '1.0.0']),
+          ),
+          depth: 0,
+          parent_key: null,
+          path: {
+            packages: [{ name: 'express', version: '5.2.1' }],
+          },
+        },
+        {
+          key: 'router@2.0.0',
+          package: { name: 'router', version: '2.0.0' },
+          metadata: createMetadata('router', '2.0.0'),
+          depth: 1,
+          parent_key: 'express@5.2.1',
+          path: {
+            packages: [
+              { name: 'express', version: '5.2.1' },
+              { name: 'router', version: '2.0.0' },
+            ],
+          },
+        },
+        {
+          key: 'path-to-regexp@8.4.2',
+          package: { name: 'path-to-regexp', version: '8.4.2' },
+          metadata: createMetadata('path-to-regexp', '8.4.2'),
+          depth: 2,
+          parent_key: 'router@2.0.0',
+          path: {
+            packages: [
+              { name: 'express', version: '5.2.1' },
+              { name: 'router', version: '2.0.0' },
+              { name: 'path-to-regexp', version: '8.4.2' },
+            ],
+          },
+        },
+      ],
+    }),
+    packageLockTraverser: new StubPackageLockTraverser({
+      root_key: 'express@5.2.1',
+      nodes: [],
+    }),
+    pnpmLockTraverser: new StubPnpmLockTraverser({
+      root_key: 'express@5.2.1',
+      nodes: [],
+    }),
+    scorer: new FixtureRiskScorer({
+      'express@5.2.1': {
+        risk_score: 0.08,
+        risk_level: 'safe',
+        recommendation: 'install',
+        signals: [
+          {
+            type: 'large_dependency_surface',
+            value: 25,
+            weight: 'low',
+            reason: 'package introduces 25 direct dependencies',
+          },
+        ],
+      },
+      'router@2.0.0': {
+        risk_score: 0,
+        risk_level: 'safe',
+        recommendation: 'install',
+        signals: [],
+      },
+      'path-to-regexp@8.4.2': {
+        risk_score: 0.48,
+        risk_level: 'review',
+        recommendation: 'review',
+        signals: [
+          {
+            type: 'test_signal',
+            value: 0.48,
+            weight: 'medium',
+            reason: 'score 0.48',
+          },
+        ],
+      },
+    }),
+    reviewStore,
+    now: () => new Date('2026-04-01T00:00:00.000Z'),
+  })
+
+  const result = await scanPackage({
+    scan_mode: 'registry_package',
+    package_spec: 'express',
+    max_depth: 3,
+    threshold: 0.4,
+    verbose: false,
+  })
+  const persistedRecord = reviewStore.records.at(-1)
+
+  assert.equal(result.overall_risk_score, 0.48)
+  assert.equal(result.overall_risk_level, 'review')
+  assert.equal(result.root.risk_score, 0.08)
+  assert.deepEqual(result.root.signals.map((signal) => signal.type), ['large_dependency_surface'])
+  assert.equal(result.findings[0]?.key, 'path-to-regexp@8.4.2')
+  assert.equal(result.findings[0]?.depth, 2)
+  assert.equal(persistedRecord?.primary_finding_key, 'path-to-regexp@8.4.2')
+  assert.deepEqual(persistedRecord?.signals, [])
+})
+
+test('persisted scan record keeps root signals when the primary finding is the root package', async () => {
+  const reviewStore = new InMemoryReviewStore()
+  reviewStore.records.push(
+    createStoredRecord({
+      scanTarget: 'express',
+      dependencyEdges: [],
+    }),
+  )
+
+  const scanPackage = createScanPackageUseCase({
+    registryTraverser: new StubRegistryTraverser({
+      root_key: 'express@5.2.1',
+      nodes: [
+        {
+          key: 'express@5.2.1',
+          package: { name: 'express', version: '5.2.1' },
+          metadata: createMetadata('express', '5.2.1'),
+          resolved_dependencies: Object.fromEntries(
+            Array.from({ length: 25 }, (_, index) => [`dep-${index}`, '1.0.0']),
+          ),
+          depth: 0,
+          parent_key: null,
+          path: {
+            packages: [{ name: 'express', version: '5.2.1' }],
+          },
+        },
+        {
+          key: 'child@1.0.0',
+          package: { name: 'child', version: '1.0.0' },
+          metadata: createMetadata('child', '1.0.0'),
+          depth: 1,
+          parent_key: 'express@5.2.1',
+          path: {
+            packages: [
+              { name: 'express', version: '5.2.1' },
+              { name: 'child', version: '1.0.0' },
+            ],
+          },
+        },
+      ],
+    }),
+    packageLockTraverser: new StubPackageLockTraverser({
+      root_key: 'express@5.2.1',
+      nodes: [],
+    }),
+    pnpmLockTraverser: new StubPnpmLockTraverser({
+      root_key: 'express@5.2.1',
+      nodes: [],
+    }),
+    scorer: new FixtureRiskScorer({
+      'express@5.2.1': {
+        risk_score: 0.08,
+        risk_level: 'safe',
+        recommendation: 'install',
+        signals: [
+          {
+            type: 'large_dependency_surface',
+            value: 25,
+            weight: 'low',
+            reason: 'package introduces 25 direct dependencies',
+          },
+        ],
+      },
+      'child@1.0.0': {
+        risk_score: 0,
+        risk_level: 'safe',
+        recommendation: 'install',
+        signals: [],
+      },
+    }),
+    reviewStore,
+    now: () => new Date('2026-04-01T00:00:00.000Z'),
+  })
+
+  const result = await scanPackage({
+    scan_mode: 'registry_package',
+    package_spec: 'express',
+    max_depth: 3,
+    threshold: 0.4,
+    verbose: false,
+  })
+  const persistedRecord = reviewStore.records.at(-1)
+
+  assert.equal(result.overall_risk_score, 0.4)
+  assert.equal(result.overall_risk_level, 'review')
+  assert.equal(result.root.risk_score, 0.4)
+  assert.deepEqual(result.root.signals.map((signal) => signal.type), [
+    'large_dependency_surface',
+    'new_direct_dependency_edge',
+  ])
+  assert.equal(result.findings[0]?.key, 'express@5.2.1')
+  assert.equal(result.findings[0]?.depth, 0)
+  assert.equal(persistedRecord?.primary_finding_key, undefined)
+  assert.deepEqual(persistedRecord?.signals.map((signal) => signal.type), [
+    'large_dependency_surface',
+    'new_direct_dependency_edge',
+  ])
 })
 
 test('projected dependency edge delta is omitted when there is no prior scan', async () => {
@@ -1288,10 +1523,14 @@ function createStoredRecord({
   dependencyEdges,
   scanMode = 'registry_package',
   workspaceIdentity = 'local',
+  scanTarget = 'root',
+  primaryFindingKey,
 }: {
   dependencyEdges: DependencyGraphEdge[]
   scanMode?: ScanReviewRecord['scan_mode']
   workspaceIdentity?: string
+  scanTarget?: string
+  primaryFindingKey?: string
 }): ScanReviewRecord {
   const root = createStoredPackageNode()
 
@@ -1301,14 +1540,15 @@ function createStoredRecord({
     scan_mode: scanMode,
     package: { name: 'root', version: '1.0.0' },
     package_key: 'root@1.0.0',
-    scan_target: 'root',
+    scan_target: scanTarget,
+    ...(primaryFindingKey !== undefined ? { primary_finding_key: primaryFindingKey } : {}),
     baseline_identity: {
       scan_mode: scanMode,
-      scan_target: 'root',
+      scan_target: scanTarget,
       requested_depth: 3,
       workspace_identity: workspaceIdentity,
     },
-    baseline_key: `${scanMode}::root::depth=3::workspace=${workspaceIdentity}`,
+    baseline_key: `${scanMode}::${scanTarget}::depth=3::workspace=${workspaceIdentity}`,
     baseline_record_id: null,
     requested_depth: 3,
     threshold: 0.4,
