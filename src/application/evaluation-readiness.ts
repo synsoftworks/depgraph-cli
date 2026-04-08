@@ -19,6 +19,7 @@ import type {
   SignalFrequency,
 } from '../domain/contracts.js'
 import type { PackageNode, RiskSignal } from '../domain/entities.js'
+import { isSecurityRelatedDeprecation } from '../domain/security-deprecation.js'
 
 // Export-readiness exclusions are single-reason buckets. This precedence keeps
 // counts deterministic even when one row fails multiple readiness checks.
@@ -28,14 +29,6 @@ const EXPORT_EXCLUSION_ORDER = [
   'missing_field_reliability_metadata',
   'placeholder_field_dependency',
   'unavailable_field_dependency',
-] as const
-
-const SECURITY_DEPRECATION_PATTERNS = [
-  /security vulnerability/i,
-  /security issue/i,
-  /critical vulnerability/i,
-  /cve-/i,
-  /cve /i,
 ] as const
 
 interface EvaluationDatasetSummary {
@@ -319,7 +312,7 @@ export function buildEvaluationDatasetSummary(scanRecords: ScanReviewRecord[]): 
  * @returns `true` when the message matches the evaluation security patterns.
  */
 export function isSecurityRelatedDeprecationMessage(message: string): boolean {
-  return SECURITY_DEPRECATION_PATTERNS.some((pattern) => pattern.test(message))
+  return isSecurityRelatedDeprecation(message)
 }
 
 function determineExportBlockingReasons({
