@@ -3,10 +3,10 @@ import { basename } from 'node:path'
 import type { BaselineIdentity, PackageSpec, ResolvedPackage, ScanMode } from './contracts.js'
 import type { Recommendation, RiskLevel, RiskSignal } from './entities.js'
 import { InvalidUsageError } from './errors.js'
+import { isSecurityRelatedDeprecation } from './security-deprecation.js'
 
 export const DEFAULT_MAX_DEPTH = 3
 export const DEFAULT_THRESHOLD = 0.4
-export const SECURITY_DEPRECATION_KEYWORDS = ['security', 'vulnerability', 'cve'] as const
 export const RISK_SIGNAL_WEIGHTS = {
   low: 0.08,
   medium: 0.16,
@@ -187,7 +187,5 @@ export function hasSecurityDeprecationLanguage(message: string | null): boolean 
     return false
   }
 
-  const normalizedMessage = message.toLowerCase()
-
-  return SECURITY_DEPRECATION_KEYWORDS.some((keyword) => normalizedMessage.includes(keyword))
+  return isSecurityRelatedDeprecation(message)
 }
