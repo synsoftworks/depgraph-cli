@@ -138,6 +138,7 @@ export interface ScanReviewRecord {
   package: ResolvedPackage
   package_key: string
   scan_target: string
+  primary_finding_key?: string
   baseline_identity: BaselineIdentity
   baseline_key: string
   baseline_record_id: string | null
