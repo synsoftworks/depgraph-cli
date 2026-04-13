@@ -7,7 +7,13 @@ import type {
   ScanRequest,
   ScanReviewRecord,
 } from '../domain/contracts.js'
-import type { PackageNode, RiskSignal, ScanFinding, ScanResult } from '../domain/entities.js'
+import type {
+  FieldReliabilityReport,
+  PackageNode,
+  RiskSignal,
+  ScanFinding,
+  ScanResult,
+} from '../domain/entities.js'
 import { InvalidUsageError } from '../domain/errors.js'
 import type {
   PackageLockDependencyTraverser,
@@ -209,17 +215,20 @@ export function createScanPackageUseCase({
       scan_duration_ms: Math.max(0, completedAt.getTime() - startedAt.getTime()),
       timestamp: completedAt.toISOString(),
     }
+    const scanRecord = buildScanReviewRecord({
+      result,
+      baselineIdentity,
+      dependencyEdges,
+      baselineKey,
+      baselineRecordId: previousRecord?.record_id ?? null,
+      edgeFindings,
+    })
 
-    await reviewStore.appendScanRecord(
-      buildScanReviewRecord({
-        result,
-        baselineIdentity,
-        dependencyEdges,
-        baselineKey,
-        baselineRecordId: previousRecord?.record_id ?? null,
-        edgeFindings,
-      }),
-    )
+    if (previousRecord !== null && areMateriallyEquivalentScanRecords(previousRecord, scanRecord)) {
+      return buildScanResultFromStoredRecord(previousRecord, result.field_reliability)
+    }
+
+    await reviewStore.appendScanRecord(scanRecord)
 
     return result
   }
@@ -538,6 +547,92 @@ function buildScanReviewRecord({
     scan_duration_ms: result.scan_duration_ms,
     dependency_edges: dependencyEdges,
     edge_findings: edgeFindings,
+  }
+}
+
+function areMateriallyEquivalentScanRecords(
+  left: ScanReviewRecord,
+  right: ScanReviewRecord,
+): boolean {
+  return JSON.stringify(toMaterialScanRecord(left)) === JSON.stringify(toMaterialScanRecord(right))
+}
+
+function buildScanResultFromStoredRecord(
+  record: ScanReviewRecord,
+  fieldReliability: FieldReliabilityReport,
+): ScanResult {
+  return {
+    record_id: record.record_id,
+    scan_mode: record.scan_mode,
+    scan_target: record.scan_target,
+    baseline_record_id: record.baseline_record_id,
+    requested_depth: record.requested_depth,
+    threshold: record.threshold,
+    field_reliability: record.field_reliability ?? fieldReliability,
+    root: record.root,
+    edge_findings: record.edge_findings,
+    findings: record.findings,
+    total_scanned: record.total_scanned,
+    suspicious_count: record.suspicious_count,
+    safe_count: record.safe_count,
+    overall_risk_score: record.raw_score,
+    overall_risk_level: record.risk_level,
+    warnings: record.warnings,
+    scan_duration_ms: record.scan_duration_ms,
+    timestamp: record.created_at,
+  }
+}
+
+function toMaterialScanRecord(record: ScanReviewRecord) {
+  return {
+    scan_mode: record.scan_mode,
+    package: record.package,
+    package_key: record.package_key,
+    scan_target: record.scan_target,
+    primary_finding_key: record.primary_finding_key,
+    baseline_identity: record.baseline_identity,
+    baseline_key: record.baseline_key,
+    requested_depth: record.requested_depth,
+    threshold: record.threshold,
+    raw_score: record.raw_score,
+    risk_level: record.risk_level,
+    signals: record.signals,
+    findings: record.findings.map((finding) => ({
+      ...finding,
+      review_target: {
+        kind: finding.review_target.kind,
+        target_id: finding.review_target.target_id,
+        finding_key: finding.review_target.finding_key,
+        package_key: finding.review_target.package_key,
+      },
+    })),
+    root: toMaterialPackageNode(record.root),
+    total_scanned: record.total_scanned,
+    suspicious_count: record.suspicious_count,
+    safe_count: record.safe_count,
+    warnings: record.warnings,
+    dependency_edges: record.dependency_edges,
+    edge_findings: record.edge_findings.map((finding) => ({
+      ...finding,
+      review_target: {
+        kind: finding.review_target.kind,
+        target_id: finding.review_target.target_id,
+        edge_finding_key: finding.review_target.edge_finding_key,
+        parent_key: finding.review_target.parent_key,
+        child_key: finding.review_target.child_key,
+        edge_type: finding.review_target.edge_type,
+      },
+    })),
+  }
+}
+
+function toMaterialPackageNode(node: PackageNode): PackageNode {
+  return {
+    ...node,
+    // age_days drifts with wall-clock time between rescans, so it is not treated as newly observed evidence.
+    // Keep other node fields comparison-bearing unless they are explicitly justified as pure run-time drift.
+    age_days: null,
+    dependencies: node.dependencies.map(toMaterialPackageNode),
   }
 }
 
