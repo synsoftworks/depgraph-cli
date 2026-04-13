@@ -72,7 +72,7 @@ class StubScorer implements RiskScorer {
   }
 }
 
-test('Scenario A: repeat scan with the same projected structure does not create diff escalation', async () => {
+test('Scenario A: repeat scan with the same projected structure does not create diff escalation or duplicate history', async () => {
   const workingDirectory = await mkdtemp(join(tmpdir(), 'depgraph-scenario-a-'))
   const store = new JsonlScanReviewStore(defaultScanReviewStorePaths(workingDirectory))
   const registryTraverser = new MutableRegistryTraverser(createGraph(['child@1.0.0']))
@@ -119,7 +119,8 @@ test('Scenario A: repeat scan with the same projected structure does not create 
   assert.deepEqual(secondResult.edge_findings, [])
   assert.equal(firstResult.overall_risk_level, secondResult.overall_risk_level)
   assert.deepEqual(secondResult.root.signals, [])
-  assert.equal(scanHistory.trim().split('\n').length, 2)
+  assert.equal(secondResult.record_id, firstResult.record_id)
+  assert.equal(scanHistory.trim().split('\n').length, 1)
 })
 
 test('Scenario B: a suspicious new direct projected edge is captured as both an edge event and package finding', async () => {

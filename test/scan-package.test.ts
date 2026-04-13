@@ -680,6 +680,55 @@ test('scan use case persists a durable scan review record after the scan complet
   })
 })
 
+test('identical rescan of the same scan identity does not append a second full scan record', async () => {
+  const reviewStore = new InMemoryReviewStore()
+  const baselineScan = createScanPackageUseCase({
+    registryTraverser: new StubRegistryTraverser(createLinearGraph()),
+    packageLockTraverser: new StubPackageLockTraverser(createLinearGraph()),
+    pnpmLockTraverser: new StubPnpmLockTraverser(createLinearGraph()),
+    scorer: new StubScorer({
+      'root@1.0.0': 0.1,
+      'child@1.0.0': 0,
+    }),
+    reviewStore,
+    now: () => new Date('2026-04-01T00:00:00.000Z'),
+  })
+  const repeatScan = createScanPackageUseCase({
+    registryTraverser: new StubRegistryTraverser(createLinearGraph()),
+    packageLockTraverser: new StubPackageLockTraverser(createLinearGraph()),
+    pnpmLockTraverser: new StubPnpmLockTraverser(createLinearGraph()),
+    scorer: new StubScorer({
+      'root@1.0.0': 0.1,
+      'child@1.0.0': 0,
+    }),
+    reviewStore,
+    now: () => new Date('2026-04-02T00:00:00.000Z'),
+  })
+
+  const firstResult = await baselineScan({
+    scan_mode: 'registry_package',
+    package_spec: 'root',
+    max_depth: 3,
+    threshold: 0.4,
+    verbose: false,
+  })
+  const secondResult = await repeatScan({
+    scan_mode: 'registry_package',
+    package_spec: 'root',
+    max_depth: 3,
+    threshold: 0.4,
+    verbose: false,
+  })
+
+  assert.equal(reviewStore.records.length, 1)
+  assert.equal(secondResult.record_id, firstResult.record_id)
+  assert.equal(secondResult.timestamp, firstResult.timestamp)
+  assert.equal(secondResult.baseline_record_id, firstResult.baseline_record_id)
+  assert.deepEqual(secondResult.root, firstResult.root)
+  assert.deepEqual(secondResult.findings, firstResult.findings)
+  assert.deepEqual(secondResult.edge_findings, firstResult.edge_findings)
+})
+
 test('persisted scan record clears top-level signals and stores primary_finding_key when the primary finding is transitive', async () => {
   const reviewStore = new InMemoryReviewStore()
 
@@ -1082,6 +1131,116 @@ test('projected dependency edge delta records newly introduced edges against the
     }),
   ])
   assert.deepEqual(reviewStore.records.at(-1)?.edge_findings, result.edge_findings)
+  assert.equal(reviewStore.records.length, 2)
+})
+
+test('baseline lookup still uses the latest persisted record after an identical rescan is suppressed', async () => {
+  const reviewStore = new InMemoryReviewStore()
+  const baselineScan = createScanPackageUseCase({
+    registryTraverser: new StubRegistryTraverser(createLinearGraph()),
+    packageLockTraverser: new StubPackageLockTraverser(createLinearGraph()),
+    pnpmLockTraverser: new StubPnpmLockTraverser(createLinearGraph()),
+    scorer: new StubScorer({
+      'root@1.0.0': 0.1,
+      'child@1.0.0': 0,
+      'grandchild@1.0.0': 0.8,
+    }),
+    reviewStore,
+    now: () => new Date('2026-04-01T00:00:00.000Z'),
+  })
+  const repeatScan = createScanPackageUseCase({
+    registryTraverser: new StubRegistryTraverser(createLinearGraph()),
+    packageLockTraverser: new StubPackageLockTraverser(createLinearGraph()),
+    pnpmLockTraverser: new StubPnpmLockTraverser(createLinearGraph()),
+    scorer: new StubScorer({
+      'root@1.0.0': 0.1,
+      'child@1.0.0': 0,
+      'grandchild@1.0.0': 0.8,
+    }),
+    reviewStore,
+    now: () => new Date('2026-04-02T00:00:00.000Z'),
+  })
+  const changedScan = createScanPackageUseCase({
+    registryTraverser: new StubRegistryTraverser({
+      root_key: 'root@1.0.0',
+      nodes: [
+        {
+          key: 'root@1.0.0',
+          package: { name: 'root', version: '1.0.0' },
+          metadata: createMetadata('root', '1.0.0'),
+          depth: 0,
+          parent_key: null,
+          path: {
+            packages: [{ name: 'root', version: '1.0.0' }],
+          },
+        },
+        {
+          key: 'child@1.0.0',
+          package: { name: 'child', version: '1.0.0' },
+          metadata: createMetadata('child', '1.0.0'),
+          depth: 1,
+          parent_key: 'root@1.0.0',
+          path: {
+            packages: [
+              { name: 'root', version: '1.0.0' },
+              { name: 'child', version: '1.0.0' },
+            ],
+          },
+        },
+        {
+          key: 'grandchild@1.0.0',
+          package: { name: 'grandchild', version: '1.0.0' },
+          metadata: createMetadata('grandchild', '1.0.0'),
+          depth: 2,
+          parent_key: 'child@1.0.0',
+          path: {
+            packages: [
+              { name: 'root', version: '1.0.0' },
+              { name: 'child', version: '1.0.0' },
+              { name: 'grandchild', version: '1.0.0' },
+            ],
+          },
+        },
+      ],
+    }),
+    packageLockTraverser: new StubPackageLockTraverser(createLinearGraph()),
+    pnpmLockTraverser: new StubPnpmLockTraverser(createLinearGraph()),
+    scorer: new StubScorer({
+      'root@1.0.0': 0.1,
+      'child@1.0.0': 0,
+      'grandchild@1.0.0': 0.8,
+    }),
+    reviewStore,
+    now: () => new Date('2026-04-03T00:00:00.000Z'),
+  })
+
+  const baselineResult = await baselineScan({
+    scan_mode: 'registry_package',
+    package_spec: 'root',
+    max_depth: 3,
+    threshold: 0.4,
+    verbose: false,
+  })
+
+  await repeatScan({
+    scan_mode: 'registry_package',
+    package_spec: 'root',
+    max_depth: 3,
+    threshold: 0.4,
+    verbose: false,
+  })
+
+  const changedResult = await changedScan({
+    scan_mode: 'registry_package',
+    package_spec: 'root',
+    max_depth: 3,
+    threshold: 0.4,
+    verbose: false,
+  })
+
+  assert.equal(reviewStore.records.length, 2)
+  assert.equal(changedResult.baseline_record_id, baselineResult.record_id)
+  assert.equal(reviewStore.records[1]?.baseline_record_id, baselineResult.record_id)
 })
 
 test('projected dependency edge delta lookup degrades gracefully when history lookup fails', async () => {
