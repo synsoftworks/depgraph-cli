@@ -61,6 +61,12 @@ interface DependencyEdgeSnapshot {
 type PendingEdgeFinding = Omit<EdgeFinding, 'review_target'>
 type PendingScanFinding = Omit<ScanFinding, 'review_target'>
 
+/**
+ * Creates the main scan use case for registry and lockfile-backed scans.
+ *
+ * @param dependencies Runtime dependencies for traversal, scoring, and persistence.
+ * @returns Use case that executes a scan and persists material history.
+ */
 export function createScanPackageUseCase({
   registryTraverser,
   packageLockTraverser,
@@ -656,10 +662,22 @@ function resolvedDependenciesForNode(traversedNode: TraversedPackageNode): Recor
   return traversedNode.resolved_dependencies ?? traversedNode.metadata?.dependencies ?? {}
 }
 
+/**
+ * Maps a scan result to the CLI process exit code for suspicious findings.
+ *
+ * @param result Completed scan result.
+ * @returns `1` when suspicious findings exist, otherwise `0`.
+ */
 export function isSuspiciousExitCode(result: ScanResult): number {
   return result.suspicious_count > 0 ? 1 : 0
 }
 
+/**
+ * Returns the canonical root package key for a scan result.
+ *
+ * @param result Completed scan result.
+ * @returns Root package key in `name@version` form.
+ */
 export function getRootKey(result: ScanResult): string {
   return packageKey({
     name: result.root.name,

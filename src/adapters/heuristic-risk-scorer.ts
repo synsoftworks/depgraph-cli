@@ -12,6 +12,7 @@ import {
 const MATURE_PACKAGE_VERSION_THRESHOLD = 100
 const MATURE_PACKAGE_DOWNLOAD_THRESHOLD = 100_000
 
+/** Default additive heuristic scorer for package metadata signals. */
 export class HeuristicRiskScorer implements RiskScorer {
   constructor(private readonly now: () => Date = () => new Date()) {}
 

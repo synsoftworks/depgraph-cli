@@ -413,6 +413,12 @@ function riskLabel(level: RiskLevel): string {
   return formatPresentedRiskLevel(level)
 }
 
+/**
+ * Formats a risk level for TUI display.
+ *
+ * @param level Risk level to format.
+ * @returns Lowercase label shown in the TUI.
+ */
 export function formatPresentedRiskLevel(level: RiskLevel): string {
   switch (level) {
     case 'critical':
@@ -460,10 +466,22 @@ function formatDownloads(downloads: number | null, isSecurityTombstone: boolean)
   return `${downloads.toLocaleString()} / week`
 }
 
+/**
+ * Decides whether the TUI should render the overall-risk panel.
+ *
+ * @param result Partial scan result containing suspicious-count information.
+ * @returns `true` when overall risk should be shown.
+ */
 export function shouldRenderOverallRisk(result: Pick<ScanResult, 'suspicious_count'>): boolean {
   return result.suspicious_count > 0
 }
 
+/**
+ * Renders the interactive Ink scan UI.
+ *
+ * @param result Completed scan result.
+ * @returns Promise that resolves when the Ink app exits.
+ */
 export async function renderInk(result: ScanResult): Promise<void> {
   const app = render(<ScanResultView result={result} />)
   await app.waitUntilExit()

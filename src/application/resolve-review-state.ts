@@ -86,6 +86,13 @@ export function buildResolvedReviewStateIndex(
   return resolvedStates
 }
 
+/**
+ * Returns the resolved review state for a target, defaulting to an unreviewed state.
+ *
+ * @param reviewTarget Review target to resolve.
+ * @param resolvedReviewStateIndex Precomputed resolved review-state index.
+ * @returns Resolved review state for the target.
+ */
 export function getResolvedReviewState(
   reviewTarget: ReviewTarget,
   resolvedReviewStateIndex: ReadonlyMap<string, ResolvedReviewTargetState>,

@@ -5,11 +5,18 @@ import type {
 } from '../domain/benchmark.js'
 import { evaluateBenchmarkCase } from './evaluate-benchmark-case.js'
 
+/** Dependencies required to run the benchmark suite. */
 export interface RunBenchmarkSuiteDependencies {
   manifestLoader: BenchmarkManifestLoader
   scanRunner: BenchmarkScanRunner
 }
 
+/**
+ * Runs the full benchmark suite and summarizes the results.
+ *
+ * @param dependencies Runtime dependencies for loading cases and executing scans.
+ * @returns Benchmark suite result with per-case output and aggregate counts.
+ */
 export async function runBenchmarkSuite(
   dependencies: RunBenchmarkSuiteDependencies,
 ): Promise<BenchmarkSuiteResult> {

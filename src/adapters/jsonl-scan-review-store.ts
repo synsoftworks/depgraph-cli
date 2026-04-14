@@ -15,6 +15,7 @@ interface JsonlScanReviewStorePaths {
   reviewEventsPath: string
 }
 
+/** JSONL-backed implementation of the scan review store. */
 export class JsonlScanReviewStore implements ScanReviewStore {
   constructor(private readonly paths: JsonlScanReviewStorePaths) {}
 
@@ -88,6 +89,12 @@ export class JsonlScanReviewStore implements ScanReviewStore {
   }
 }
 
+/**
+ * Returns the default repo-local JSONL persistence paths.
+ *
+ * @param workingDirectory Working directory used to anchor `.depgraph`.
+ * @returns Paths for scan and review history files.
+ */
 export function defaultScanReviewStorePaths(workingDirectory: string): JsonlScanReviewStorePaths {
   // Keep append-only history repo-local and inspectable instead of hiding mutable state in a user-global cache.
   return {

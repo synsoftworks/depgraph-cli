@@ -4,6 +4,7 @@ import { resolve } from 'node:path'
 import type { BenchmarkScanRunner } from '../domain/benchmark.js'
 import type { ScanResult } from '../domain/entities.js'
 
+/** Benchmark scan runner that shells out to the built CLI. */
 export class CliBenchmarkScanRunner implements BenchmarkScanRunner {
   constructor(
     private readonly cliEntryPoint = resolve(process.cwd(), 'dist/cli/index.js'),

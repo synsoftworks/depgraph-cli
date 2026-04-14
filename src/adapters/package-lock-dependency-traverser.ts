@@ -43,6 +43,7 @@ interface IndexedPackageEntry {
   integrity: string | null
 }
 
+/** `package-lock.json` traverser that projects resolved dependencies into the shared graph shape. */
 export class PackageLockDependencyTraverser implements PackageLockDependencyTraverserPort {
   constructor(private readonly metadataSource: PackageMetadataSource) {}
 

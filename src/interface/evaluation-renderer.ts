@@ -1,9 +1,21 @@
 import type { EvaluationSummary } from '../domain/contracts.js'
 
+/**
+ * Renders evaluation output as deterministic JSON.
+ *
+ * @param summary Evaluation summary to render.
+ * @returns JSON representation of the summary.
+ */
 export function renderEvaluationJson(summary: EvaluationSummary): string {
   return JSON.stringify(summary, null, 2)
 }
 
+/**
+ * Renders evaluation output as deterministic plain text.
+ *
+ * @param summary Evaluation summary to render.
+ * @returns Plain-text evaluation report.
+ */
 export function renderEvaluationPlainText(summary: EvaluationSummary): string {
   const lines = [
     `Total scans: ${summary.total_scans}`,

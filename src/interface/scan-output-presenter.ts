@@ -18,12 +18,14 @@ const SECURITY_SIGNAL_TYPES = new Set([
 const SECURITY_MESSAGE_PATTERN = /\b(?:security|vulnerab(?:ility|ilities)|cve-\d{4}-\d+)\b/i
 const CVE_PATTERN = /\bCVE-\d{4}-\d+\b/i
 
+/** Standard scan summary counts used by human-facing renderers. */
 export interface ScanSummaryBlock {
   packages_requiring_review: number
   security_related_findings: number
   packages_appearing_safe: number
 }
 
+/** Compact scan summary projection for minimal output modes. */
 export interface CompactScanSummary {
   scanned_package: string
   overall_risk_level: ScanResult['overall_risk_level']

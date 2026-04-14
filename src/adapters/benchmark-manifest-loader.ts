@@ -11,11 +11,13 @@ import {
 } from '../domain/benchmark.js'
 import { InvalidUsageError, StorageFailureError } from '../domain/errors.js'
 
+/** Default benchmark manifest location used by the benchmark CLI flow. */
 export const DEFAULT_BENCHMARK_MANIFEST_PATH = resolve(
   process.cwd(),
   '.internal/benchmarks/benchmark-manifest.json',
 )
 
+/** JSON-backed benchmark manifest loader. */
 export class JsonBenchmarkManifestLoader implements BenchmarkManifestLoader {
   constructor(private readonly manifestPath = DEFAULT_BENCHMARK_MANIFEST_PATH) {}
 

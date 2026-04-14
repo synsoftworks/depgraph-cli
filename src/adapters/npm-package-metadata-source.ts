@@ -32,6 +32,7 @@ interface WeeklyDownloadsResult {
   lookup_failed: boolean
 }
 
+/** npm-registry-backed package metadata source. */
 export class NpmPackageMetadataSource implements PackageMetadataSource {
   constructor(private readonly fetcher: typeof fetch = fetch) {}
 

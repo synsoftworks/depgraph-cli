@@ -7,11 +7,17 @@ import type {
   ScanWarning,
 } from './contracts.js'
 
+/** Severity band derived from a package risk score. */
 export type RiskLevel = 'safe' | 'review' | 'critical'
+/** Install guidance derived from a package risk level. */
 export type Recommendation = 'install' | 'review' | 'do_not_install'
+/** Relative contribution of an individual risk signal. */
 export type RiskSignalWeight = 'low' | 'medium' | 'high' | 'critical'
+/** Review outcome captured in review history. */
 export type ReviewOutcome = 'malicious' | 'benign' | 'needs_review'
+/** Origin of a review decision. */
 export type ReviewSource = 'human' | 'auto' | 'external'
+/** Reliability tier assigned by ADR-012 field policy. */
 export type FieldReliabilityTier =
   | 'reliable'
   | 'conditionally_reliable'
@@ -21,17 +27,20 @@ export type FieldReliabilityTier =
   | 'structural_only'
   | 'scan_context'
 
+/** Reliability guidance for a single exported field. */
 export interface FieldReliabilityEntry {
   tier: FieldReliabilityTier
   guidance: string
   notes?: string[]
 }
 
+/** ADR-012 field reliability policy snapshot attached to a scan result. */
 export interface FieldReliabilityReport {
   adr: 'ADR-012'
   fields: Record<string, FieldReliabilityEntry>
 }
 
+/** One heuristic signal contributing to a package risk assessment. */
 export interface RiskSignal {
   type: string
   value: string | number | boolean | null
@@ -39,6 +48,7 @@ export interface RiskSignal {
   reason: string
 }
 
+/** Materialized dependency node in the rendered scan tree. */
 export interface PackageNode {
   name: string
   version: string
@@ -70,6 +80,7 @@ export interface PackageNode {
   dependencies: PackageNode[]
 }
 
+/** Suspicious package finding surfaced from the scanned dependency view. */
 export interface ScanFinding {
   key: string
   name: string
@@ -84,6 +95,7 @@ export interface ScanFinding {
   explanation: string
 }
 
+/** Full application-layer result returned by a completed scan. */
 export interface ScanResult {
   record_id: string
   scan_mode: ScanMode

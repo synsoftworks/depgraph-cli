@@ -19,6 +19,10 @@ import type {
   SignalFrequency,
 } from '../domain/contracts.js'
 import type { PackageNode, RiskSignal } from '../domain/entities.js'
+import {
+  getPackageNodeMetadataFieldState,
+  isObservedMetadataField,
+} from '../domain/metadata-field-state.js'
 import { isSecurityRelatedDeprecation } from '../domain/security-deprecation.js'
 
 // Export-readiness exclusions are single-reason buckets. This precedence keeps
@@ -200,6 +204,8 @@ export function buildEvaluationDatasetSummary(scanRecords: ScanReviewRecord[]): 
     // they are structural roots rather than real published packages.
     for (const node of flattenMetadataNodes(record.root)) {
       totalNodes += 1
+      const dependentsCountState = getPackageNodeMetadataFieldState(node, 'dependents_count')
+      const advisoriesState = getPackageNodeMetadataFieldState(node, 'has_advisories')
 
       if (node.weekly_downloads === null) {
         nodesMissingWeeklyDownloads += 1
@@ -208,7 +214,7 @@ export function buildEvaluationDatasetSummary(scanRecords: ScanReviewRecord[]): 
         collectSignals(node.signals, knownDownloadsSignalCounts)
       }
 
-      if (node.dependents_count === null) {
+      if (!isObservedMetadataField(dependentsCountState)) {
         nodesMissingDependentsCount += 1
         dependentsCountUnavailableCount += 1
         collectSignals(node.signals, missingDependentsSignalCounts)
@@ -216,7 +222,10 @@ export function buildEvaluationDatasetSummary(scanRecords: ScanReviewRecord[]): 
         collectSignals(node.signals, knownDependentsSignalCounts)
       }
 
-      if (node.has_advisories === false) {
+      if (
+        advisoriesState.observation === 'unavailable'
+        && advisoriesState.reason === 'not_collected_yet'
+      ) {
         hasAdvisoriesPlaceholderCount += 1
       }
 

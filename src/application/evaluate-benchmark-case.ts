@@ -6,10 +6,18 @@ import type {
 } from '../domain/benchmark.js'
 import type { ScanResult } from '../domain/entities.js'
 
+/** Dependencies required to evaluate one benchmark case. */
 export interface EvaluateBenchmarkCaseDependencies {
   scanRunner: BenchmarkScanRunner
 }
 
+/**
+ * Evaluates one benchmark case by running a scan and comparing expected outcomes.
+ *
+ * @param benchmarkCase Benchmark case to evaluate.
+ * @param dependencies Runtime dependency for executing scans.
+ * @returns Benchmark result describing pass, fail, or skipped status.
+ */
 export async function evaluateBenchmarkCase(
   benchmarkCase: BenchmarkCase,
   dependencies: EvaluateBenchmarkCaseDependencies,
@@ -77,6 +85,12 @@ export async function evaluateBenchmarkCase(
   }
 }
 
+/**
+ * Maps a scan result to the benchmark priority vocabulary.
+ *
+ * @param scanResult Completed scan result.
+ * @returns Expected-priority equivalent for benchmark assertions.
+ */
 export function mapPriorityFromScan(scanResult: ScanResult): ExpectedPriority {
   if (scanResult.root.risk_score >= scanResult.threshold) {
     return 'high_priority_review'
@@ -89,6 +103,12 @@ export function mapPriorityFromScan(scanResult: ScanResult): ExpectedPriority {
   return 'safe'
 }
 
+/**
+ * Extracts stable actual signal identifiers from a scan result.
+ *
+ * @param scanResult Completed scan result.
+ * @returns Sorted unique signal identifiers from root signals and warnings.
+ */
 export function extractActualSignals(scanResult: ScanResult): string[] {
   const signals = new Set<string>()
 
@@ -103,6 +123,13 @@ export function extractActualSignals(scanResult: ScanResult): string[] {
   return [...signals].sort((left, right) => left.localeCompare(right))
 }
 
+/**
+ * Computes which expected benchmark signals were missing from the actual scan output.
+ *
+ * @param expectedSignals Expected signal identifiers from the benchmark case.
+ * @param actualSignals Actual signal identifiers extracted from a scan result.
+ * @returns Missing expected signals.
+ */
 export function findMissingSignals(expectedSignals: string[], actualSignals: string[]): string[] {
   const actualSignalSet = new Set(actualSignals)
 
