@@ -13,6 +13,12 @@ interface EvaluateScansDependencies {
   resolveReviewStateIndex: () => Promise<ReadonlyMap<string, ResolvedReviewTargetState>>
 }
 
+/**
+ * Creates the evaluation use case for persisted scans and review history.
+ *
+ * @param dependencies Runtime dependencies for scan records, review events, and resolved review state.
+ * @returns Use case that aggregates evaluation summary output.
+ */
 export function createEvaluateScansUseCase({
   scanRecordSource,
   rawReviewEventSource,

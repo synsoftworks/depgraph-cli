@@ -1,7 +1,10 @@
+/** Classification of a surfaced benchmark failure. */
 export type SurfacedFailureClass = 'underweighted_signal' | 'missing_signal'
 
+/** Status explaining why a surfaced failure is being reported. */
 export type SurfacedFailureStatus = 'historical_match' | 'known_boundary_case'
 
+/** One surfaced historical or known-boundary failure entry. */
 export interface SurfacedFailure {
   package: string
   version: string
@@ -11,12 +14,14 @@ export interface SurfacedFailure {
   reason: string
 }
 
+/** Aggregate output of the failure-surfacing evaluation flow. */
 export interface FailureSurfacingSummary {
   total_records_scanned: number
   total_matches: number
   failures: SurfacedFailure[]
 }
 
+/** Hand-maintained known boundary case that should still surface in reports. */
 export interface KnownBoundaryCase {
   package: string
   version: string
@@ -25,6 +30,7 @@ export interface KnownBoundaryCase {
   reason: string
 }
 
+/** Known benchmark boundary cases that are expected to miss current metadata-only heuristics. */
 export const KNOWN_BOUNDARY_CASES: KnownBoundaryCase[] = [
   {
     package: 'isite',

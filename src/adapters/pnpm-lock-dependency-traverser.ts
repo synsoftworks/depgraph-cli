@@ -6,6 +6,7 @@ import type {
 import { parsePnpmLockfile } from './parsers/pnpm-lockfile-parser.js'
 import { traverseNormalizedLockfileProject } from './lockfile-dependency-traversal.js'
 
+/** `pnpm-lock.yaml` traverser that projects importer dependencies into the shared graph shape. */
 export class PnpmLockDependencyTraverser implements PnpmLockDependencyTraverserPort {
   constructor(private readonly metadataSource: PackageMetadataSource) {}
 

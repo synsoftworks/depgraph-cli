@@ -10,21 +10,25 @@ import type {
   ScanFinding,
 } from './entities.js'
 
+/** Parsed npm package input with an optional requested version range. */
 export interface PackageSpec {
   name: string
   version_range?: string
 }
 
+/** Exact resolved package identity. */
 export interface ResolvedPackage {
   name: string
   version: string
 }
 
+/** Dependency path captured under the current projected traversal model. */
 export interface DependencyPath {
   // v1 paths follow the current BFS tree projection, not every possible parent path in the underlying DAG.
   packages: ResolvedPackage[]
 }
 
+/** Availability state of package metadata for a traversed node. */
 export type PackageMetadataStatus =
   | 'enriched'
   | 'unresolved_registry_lookup'
@@ -32,8 +36,10 @@ export type PackageMetadataStatus =
 
 // Scan mode records which structural source produced the scan.
 // Baseline matching and downstream analysis must keep these source types separate.
+/** Structural source used to build a scan. */
 export type ScanMode = 'registry_package' | 'package_lock' | 'pnpm_lock'
 
+/** Request for a registry-backed package scan. */
 export interface RegistryPackageScanRequest {
   scan_mode: 'registry_package'
   package_spec: string
@@ -43,6 +49,7 @@ export interface RegistryPackageScanRequest {
   workspace_identity?: string
 }
 
+/** Request for a project scan sourced from `package-lock.json`. */
 export interface PackageLockScanRequest {
   scan_mode: 'package_lock'
   package_lock_path: string
@@ -53,6 +60,7 @@ export interface PackageLockScanRequest {
   workspace_identity?: string
 }
 
+/** Request for a project scan sourced from `pnpm-lock.yaml`. */
 export interface PnpmLockScanRequest {
   scan_mode: 'pnpm_lock'
   pnpm_lock_path: string
@@ -63,10 +71,13 @@ export interface PnpmLockScanRequest {
   workspace_identity?: string
 }
 
+/** Any supported lockfile-backed project scan request. */
 export type ProjectScanRequest = PackageLockScanRequest | PnpmLockScanRequest
 
+/** Any supported scan request accepted by the application layer. */
 export type ScanRequest = RegistryPackageScanRequest | ProjectScanRequest
 
+/** Registry metadata and coarse ecosystem signals for one resolved package. */
 export interface PackageMetadata {
   package: ResolvedPackage
   dependencies: Record<string, string>
@@ -84,6 +95,7 @@ export interface PackageMetadata {
   dependents_count: number | null
 }
 
+/** Heuristic assessment produced by a risk scorer for one package. */
 export interface RiskAssessment {
   risk_score: number
   risk_level: RiskLevel
@@ -91,6 +103,7 @@ export interface RiskAssessment {
   signals: RiskSignal[]
 }
 
+/** Dependency edge preserved from the current traversal projection. */
 export interface DependencyGraphEdge {
   // Despite the name, v1 stores edges from the current BFS dependency tree projection.
   // Shared packages collapsed by the traverser may have additional real parents that are not represented here.
@@ -99,6 +112,7 @@ export interface DependencyGraphEdge {
   child_depth: number
 }
 
+/** Baseline identity used to match comparable historical scans. */
 export interface BaselineIdentity {
   // Cross-mode baselines are invalid even when target and workspace match.
   scan_mode: ScanMode
@@ -107,6 +121,7 @@ export interface BaselineIdentity {
   workspace_identity: string
 }
 
+/** Newly introduced dependency edge relative to a matching baseline scan. */
 export interface EdgeFinding {
   // Edge findings describe newly introduced projected edges relative to the latest matching baseline scan.
   parent_key: string
@@ -121,6 +136,7 @@ export interface EdgeFinding {
   recommendation: Recommendation | null
 }
 
+/** Scan-time warning about incomplete or degraded evidence. */
 export interface ScanWarning {
   kind: 'unresolved_registry_lookup' | 'weekly_downloads_unavailable'
   package_key: string
@@ -131,6 +147,7 @@ export interface ScanWarning {
   lockfile_integrity: string | null
 }
 
+/** Persisted append-only scan snapshot stored for review and baseline workflows. */
 export interface ScanReviewRecord {
   record_id: string
   created_at: string
@@ -160,6 +177,7 @@ export interface ScanReviewRecord {
   warnings: ScanWarning[]
 }
 
+/** Command payload for appending a review event to a stored scan. */
 export interface ReviewScanRequest {
   record_id: string
   target_id?: string
@@ -169,6 +187,7 @@ export interface ReviewScanRequest {
   confidence: number | null
 }
 
+/** Supported kinds of review target. */
 export type ReviewTargetKind = 'package_finding' | 'edge_finding'
 
 interface ReviewTargetBase {
@@ -177,12 +196,14 @@ interface ReviewTargetBase {
   target_id: string
 }
 
+/** Review target identifying a package-level scan finding. */
 export interface PackageFindingReviewTarget extends ReviewTargetBase {
   kind: 'package_finding'
   finding_key: string
   package_key: string
 }
 
+/** Review target identifying a newly introduced dependency edge. */
 export interface EdgeFindingReviewTarget extends ReviewTargetBase {
   kind: 'edge_finding'
   edge_finding_key: string
@@ -191,6 +212,7 @@ export interface EdgeFindingReviewTarget extends ReviewTargetBase {
   edge_type: EdgeFinding['edge_type']
 }
 
+/** Any persisted finding target that can receive review events. */
 export type ReviewTarget = PackageFindingReviewTarget | EdgeFindingReviewTarget
 
 /**
@@ -211,9 +233,12 @@ export interface ReviewEvent {
   confidence: number | null
 }
 
+/** Canonical label derived from review history. */
 export type CanonicalLabel = 'malicious' | 'benign'
+/** Workflow state derived from review history. */
 export type WorkflowStatus = 'unreviewed' | 'needs_review' | 'resolved'
 // Current canonical-label policy: higher-trust sources win; recency only breaks ties within a source tier.
+/** Policy used to derive canonical labels from raw events. */
 export type CanonicalLabelSource = 'source_precedence_then_latest_within_source'
 
 /**
@@ -232,22 +257,26 @@ export interface ResolvedReviewTargetState {
   canonical_label_source: CanonicalLabelSource | null
 }
 
+/** Frequency counter for a signal type across stored scans. */
 export interface SignalFrequency {
   type: string
   count: number
 }
 
+/** Coverage summary for one metadata field across package nodes. */
 export interface MetadataFieldCoverage {
   total_nodes: number
   missing_count: number
   missing_percent: number
 }
 
+/** Signal-frequency split by whether a metadata field was present. */
 export interface CoverageSignalFrequency {
   known: SignalFrequency[]
   missing: SignalFrequency[]
 }
 
+/** Metadata coverage section of evaluation output. */
 export interface MetadataCoverageSummary {
   weekly_downloads: MetadataFieldCoverage
   dependents_count: MetadataFieldCoverage
@@ -255,6 +284,7 @@ export interface MetadataCoverageSummary {
   signal_frequency_by_dependents_count: CoverageSignalFrequency
 }
 
+/** Exact ADR-012 field-tier counts across eligible records. */
 export interface FieldReliabilityDistributionSummary {
   records_with_field_reliability: number
   records_excluded_missing_field_reliability: number
@@ -267,18 +297,21 @@ export interface FieldReliabilityDistributionSummary {
   scan_context: number
 }
 
+/** Integrity counters for known structural and metadata boundary cases. */
 export interface IntegritySignalsSummary {
   synthetic_project_root_count: number
   unresolved_registry_lookup_count: number
   deprecated_with_security_signal_count: number
 }
 
+/** Counters for placeholder and unavailable fields that block export readiness. */
 export interface FieldReadinessIssuesSummary {
   dependents_count_unavailable_count: number
   has_advisories_placeholder_count: number
   records_missing_field_reliability_count: number
 }
 
+/** Counts of heuristic outputs already materialized on persisted nodes. */
 export interface HeuristicOutputPresenceSummary {
   nodes_with_risk_score: number
   nodes_with_risk_level: number
@@ -286,6 +319,7 @@ export interface HeuristicOutputPresenceSummary {
   nodes_with_signals: number
 }
 
+/** Readiness totals for future deterministic dataset export. */
 export interface ExportReadinessSummary {
   records_total: number
   records_with_field_reliability: number
@@ -306,6 +340,7 @@ export interface ExportReadinessSummary {
   }
 }
 
+/** Raw review-event counters before canonical label derivation. */
 export interface RawReviewEventSummary {
   total_events: number
   malicious_events: number
@@ -313,6 +348,7 @@ export interface RawReviewEventSummary {
   needs_review_events: number
 }
 
+/** Canonical label counts after resolved-state derivation. */
 export interface CanonicalLabelSummary {
   total_labeled_targets: number
   malicious_targets: number
@@ -321,18 +357,21 @@ export interface CanonicalLabelSummary {
   derived_from: CanonicalLabelSource
 }
 
+/** Workflow-status counts derived from resolved review state. */
 export interface WorkflowStatusSummary {
   unreviewed_targets: number
   needs_review_targets: number
   resolved_targets: number
 }
 
+/** Review-target counts across stored scan history. */
 export interface ReviewTargetSummary {
   total_targets: number
   package_finding_targets: number
   edge_finding_targets: number
 }
 
+/** Aggregate output returned by the evaluation use case. */
 export interface EvaluationSummary {
   total_scans: number
   review_targets: ReviewTargetSummary

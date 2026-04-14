@@ -1,5 +1,11 @@
 import type { ScanResult } from '../domain/entities.js'
 
+/**
+ * Produces concise human-readable ADR-012 field reliability notes for scan output.
+ *
+ * @param result Completed scan result with field reliability metadata.
+ * @returns Summary lines for plain-text rendering.
+ */
 export function getFieldReliabilityPolicySummary(result: ScanResult): string[] {
   const fields = result.field_reliability.fields
 

@@ -36,6 +36,13 @@ type PnpmDependencyReference =
       specifier?: string
     }
 
+/**
+ * Parses a pnpm lockfile into the normalized project traversal interface.
+ *
+ * @param pnpmLockPath Path to `pnpm-lock.yaml`.
+ * @param projectRoot Project root whose importer should be scanned.
+ * @returns Normalized lockfile project.
+ */
 export function parsePnpmLockfile(
   pnpmLockPath: string,
   projectRoot: string,

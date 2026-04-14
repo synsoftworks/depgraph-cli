@@ -14,6 +14,7 @@ interface QueueItem {
   path_packages: TraversedPackageNode['path']['packages']
 }
 
+/** Breadth-first registry dependency traverser using resolved package metadata. */
 export class RegistryDependencyTraverser implements RegistryDependencyTraverserPort {
   constructor(private readonly metadataSource: PackageMetadataSource) {}
 

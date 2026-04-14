@@ -88,6 +88,7 @@ test('evaluate scans reports metadata coverage and latest-label counts', async (
     0,
   )
   assert.equal(summary.field_readiness_issues.records_missing_field_reliability_count, 0)
+  assert.equal(summary.field_readiness_issues.has_advisories_placeholder_count, 2)
   assert.equal(summary.integrity_signals.synthetic_project_root_count, 0)
   assert.equal(summary.heuristic_output_presence.nodes_with_risk_score, 2)
   assert.equal(summary.export_readiness.records_total, 1)
@@ -170,8 +171,8 @@ test('evaluate scans handles mixed historical records and readiness exclusion pr
   assert.equal(summary.integrity_signals.synthetic_project_root_count, 1)
   assert.equal(summary.integrity_signals.unresolved_registry_lookup_count, 1)
   assert.equal(summary.integrity_signals.deprecated_with_security_signal_count, 1)
-  assert.equal(summary.field_readiness_issues.dependents_count_unavailable_count, 1)
-  assert.equal(summary.field_readiness_issues.has_advisories_placeholder_count, 3)
+  assert.equal(summary.field_readiness_issues.dependents_count_unavailable_count, 2)
+  assert.equal(summary.field_readiness_issues.has_advisories_placeholder_count, 2)
   assert.equal(summary.heuristic_output_presence.nodes_with_risk_score, 3)
   assert.equal(summary.heuristic_output_presence.nodes_with_risk_level, 3)
   assert.equal(summary.heuristic_output_presence.nodes_with_recommendation, 3)

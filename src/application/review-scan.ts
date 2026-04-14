@@ -7,6 +7,12 @@ interface ReviewScanDependencies {
   now?: () => Date
 }
 
+/**
+ * Creates the review append use case for stored scan records.
+ *
+ * @param dependencies Runtime dependencies for persistence and time.
+ * @returns Use case that appends a review event.
+ */
 export function createReviewScanUseCase({
   reviewStore,
   now = () => new Date(),

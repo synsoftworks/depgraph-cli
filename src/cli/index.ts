@@ -20,6 +20,7 @@ interface WritableStreamLike {
   write(text: string): void
 }
 
+/** Runtime contract injected into the CLI entrypoint. */
 export interface CliRuntime {
   scanPackage: (request: ScanRequest) => Promise<ScanResult>
   resolveProjectScan: (projectPath: string) => Promise<ProjectScanRequest>
@@ -41,6 +42,13 @@ export interface CliRuntime {
   isTty: boolean
 }
 
+/**
+ * Runs the DepGraph CLI with the provided argv and runtime overrides.
+ *
+ * @param argv User argv without the node executable prefix.
+ * @param overrides Optional runtime overrides for tests or embedding.
+ * @returns Process exit code.
+ */
 export async function run(argv: string[], overrides: Partial<CliRuntime> = {}): Promise<number> {
   const runtime = await createRuntime(overrides)
   const program = new Command()

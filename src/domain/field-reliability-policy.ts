@@ -1,5 +1,10 @@
 import type { FieldReliabilityEntry, FieldReliabilityReport } from './entities.js'
 
+/**
+ * Builds the current ADR-012 field reliability policy snapshot.
+ *
+ * @returns Field reliability report used in scan results and readiness analysis.
+ */
 export function createFieldReliabilityReport(): FieldReliabilityReport {
   return {
     adr: 'ADR-012',
@@ -82,6 +87,8 @@ export function createFieldReliabilityReport(): FieldReliabilityReport {
       ),
       'package_node.dependents_count': unavailable(
         'Exclude from analysis and export until collection is implemented.',
+        'Interpret raw values through the metadata field-state helpers.',
+        'Do not treat null as zero or as a benign missing feature value.',
       ),
       'package_node.deprecated_message': reliable('Safe for analysis and feature use.'),
       'package_node.is_security_tombstone': reliable('Safe for analysis and feature use.'),
@@ -93,6 +100,8 @@ export function createFieldReliabilityReport(): FieldReliabilityReport {
       'package_node.publish_events_last_30_days': reliable('Safe for analysis and feature use.'),
       'package_node.has_advisories': placeholder(
         'Exclude from analysis and export until advisory ingestion is implemented.',
+        'Interpret raw values through the metadata field-state helpers.',
+        'Do not treat false as observed clean advisory status.',
       ),
       'package_node.risk_score': heuristicOutput(
         'Valid for UI and debugging; do not use as ground truth or labels.',

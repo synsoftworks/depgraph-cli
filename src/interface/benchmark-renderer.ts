@@ -1,5 +1,11 @@
 import type { BenchmarkResult, BenchmarkSuiteResult } from '../domain/benchmark.js'
 
+/**
+ * Renders a benchmark suite result as aligned plain text.
+ *
+ * @param suiteResult Benchmark suite result to render.
+ * @returns Plain-text benchmark report.
+ */
 export function renderBenchmarkSuite(suiteResult: BenchmarkSuiteResult): string {
   const idWidth = Math.max(...suiteResult.results.map((result) => result.id.length), 'ID'.length)
   const packageWidth = Math.max(

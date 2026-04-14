@@ -7,6 +7,7 @@ import type {
 } from '../domain/ports.js'
 import { packageKey } from '../domain/value-objects.js'
 
+/** Normalized dependency entry extracted from a lockfile snapshot. */
 export interface NormalizedLockfileEntry {
   entry_id: string
   name: string
@@ -16,6 +17,7 @@ export interface NormalizedLockfileEntry {
   integrity: string | null
 }
 
+/** Shared lockfile traversal interface consumed by lockfile adapters. */
 export interface NormalizedLockfileProject {
   root_package: PackageMetadata['package']
   root_dependencies: Record<string, string>
@@ -38,6 +40,14 @@ interface QueueItem {
 // converts the root into an explicit project-root PackageNode with nullable package metadata.
 const SYNTHETIC_ROOT_PUBLISHED_AT = '1970-01-01T00:00:00.000Z'
 
+/**
+ * Traverses a normalized lockfile project into the shared traversed-graph shape.
+ *
+ * @param project Normalized lockfile project.
+ * @param metadataSource Metadata source for exact package enrichment.
+ * @param maxDepth Maximum dependency depth to traverse.
+ * @returns Traversed dependency graph.
+ */
 export async function traverseNormalizedLockfileProject(
   project: NormalizedLockfileProject,
   metadataSource: PackageMetadataSource,
