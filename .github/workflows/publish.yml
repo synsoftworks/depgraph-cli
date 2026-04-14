@@ -33,11 +33,17 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Test
+        run: pnpm test
+
       - name: Build
         run: pnpm run build
 
-      - name: Test
-        run: pnpm test
+      - name: End-to-end test
+        run: pnpm run test:e2e
+
+      - name: Verify package contents
+        run: pnpm run pack:dry-run
 
       - name: Publish to npm
         run: npm publish

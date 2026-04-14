@@ -7,8 +7,9 @@ build/
 out/
 *.tsbuildinfo
 
-# npm pack (local tarballs; do not commit)
+# npm pack / test artifacts (local; do not commit)
 *.tgz
+.npm-pack-cache/
 
 # Environment / secrets
 .env
@@ -50,4 +51,3 @@ AGENTS.md
 
 # Internal local docs / ADRs
 .internal/
-

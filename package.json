@@ -42,10 +42,13 @@
     "build": "tsc -p tsconfig.json",
     "benchmark": "node dist/benchmark/index.js",
     "dev": "tsx src/cli/index.ts",
-    "test": "node --import tsx --test",
+    "pack:dry-run": "npm --cache .npm-pack-cache pack --dry-run",
+    "release:check": "pnpm test && pnpm run build && pnpm run test:e2e && pnpm run pack:dry-run",
+    "test": "node --import tsx --test test/**/*.test.ts",
+    "test:e2e": "node --import tsx --test test/**/*.e2e.ts",
     "test:smoke": "node --import tsx --test test/json-renderer.test.ts test/review-renderer.test.ts test/evaluation-renderer.test.ts test/integrated-scenarios.test.ts",
     "lint": "tsc --noEmit",
-    "prepublishOnly": "pnpm run build"
+    "prepublishOnly": "pnpm run release:check"
   },
   "packageManager": "pnpm@10.33.0",
   "dependencies": {
