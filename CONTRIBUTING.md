@@ -9,6 +9,7 @@ pnpm install
 pnpm run lint
 pnpm test
 pnpm run build
+pnpm run test:e2e
 ```
 
 Run the CLI locally:
@@ -41,7 +42,17 @@ with your benchmark cases. See internal documentation for the schema.
 - open an issue first for larger feature changes
 - keep changes scoped and explain the behavior change clearly
 - add or update tests when behavior changes
-- run `pnpm run lint`, `pnpm test`, and `pnpm run build` before submitting
+- run `pnpm run lint`, `pnpm test`, `pnpm run build`, and `pnpm run test:e2e` before submitting
+
+## Release Readiness
+
+Use the built-artifact verification path before cutting or publishing a release:
+
+```bash
+pnpm run release:check
+```
+
+This verifies the source test suite, the compiled CLI entrypoint at `dist/cli/index.js`, and the package contents that would be published.
 
 ## Commit Quality
 
