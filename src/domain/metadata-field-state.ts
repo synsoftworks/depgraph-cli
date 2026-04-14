@@ -29,8 +29,9 @@ export interface MetadataFieldState<T> {
  * these helpers instead of inferring meaning directly from `null` or `false`.
  *
  * This contract distinguishes between "observed absence" and "not collected yet".
- * Fields that are not currently ingested MUST return `unavailable`, not
- * `observed_absent`.
+ * Observed absence means the system actually checked the field and confirmed
+ * that the value is absent or clean. Fields that are not currently ingested
+ * MUST return `unavailable`, not `observed_absent`.
  *
  * `observed_absent` is part of the contract for fields that are explicitly
  * checked clean, but current advisory ingestion does not produce that state yet.
@@ -53,6 +54,10 @@ export function observedPresentMetadataFieldState<T>(value: T): MetadataFieldSta
 
 /**
  * Creates a state representing an observed explicit absence.
+ *
+ * Use this only when DepGraph actually checked the field and confirmed the
+ * absence. Fields that are not ingested yet must return `unavailable`, not
+ * `observed_absent`.
  *
  * @param value Field value that encodes a checked-clean or otherwise observed absence.
  * @returns Metadata field state marked as observed absent.

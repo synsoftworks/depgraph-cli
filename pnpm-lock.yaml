@@ -14,9 +14,6 @@ importers:
       commander:
         specifier: ^14.0.3
         version: 14.0.3
-      gitrole:
-        specifier: ^0.7.0
-        version: 0.7.0
       ink:
         specifier: ^5.0.0
         version: 5.2.1(@types/react@18.3.28)(react@18.3.1)
@@ -291,11 +288,6 @@ packages:
 
   get-tsconfig@4.13.7:
     resolution: {integrity: sha512-7tN6rFgBlMgpBML5j8typ92BKFi2sFQvIdpAqLA2beia5avZDrMs0FLZiM5etShWq5irVyGcGMEA1jcDaK7A/Q==}
-
-  gitrole@0.7.0:
-    resolution: {integrity: sha512-QC9gHNzJSMrqnS8JAf/qnhwLWAzVufxRyqFIOtYJUzvcD5de5DPkGKKYk/7v79TmgEaH16O9MRqViblnhUdVHg==}
-    engines: {node: '>=20'}
-    hasBin: true
 
   indent-string@5.0.0:
     resolution: {integrity: sha512-m6FAo/spmsW2Ab2fU35JTYwtOKa2yAwXSwgjSv1TJzh4Mh7mC3lzAOVLBprb72XsTrgkEIsl7YrFNAiDiRhIGg==}
@@ -613,11 +605,6 @@ snapshots:
   get-tsconfig@4.13.7:
     dependencies:
       resolve-pkg-maps: 1.0.0
-
-  gitrole@0.7.0:
-    dependencies:
-      chalk: 5.6.2
-      commander: 14.0.3
 
   indent-string@5.0.0: {}
 

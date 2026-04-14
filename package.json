@@ -1,6 +1,6 @@
 {
   "name": "@synsoftworks/depgraph-cli",
-  "version": "0.2.8",
+  "version": "0.2.9",
   "description": "Graph-first dependency risk analysis for npm packages and dependency trees",
   "type": "module",
   "keywords": [
