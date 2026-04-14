@@ -54,6 +54,25 @@ pnpm run release:check
 
 This verifies the source test suite, the compiled CLI entrypoint at `dist/cli/index.js`, and the package contents that would be published.
 
+## Release Automation
+
+DepGraph uses Release Please on pushes to `main`. Release Please maintains the release PR, and merging that PR creates the version bump commit, `v*` tag, and GitHub Release. The npm publish workflow remains separate and runs from the resulting GitHub Release event.
+
+Repository settings required for the Release Please app:
+
+- Variable: `RELEASE_PLEASE_APP_ID`
+- Secret: `RELEASE_PLEASE_APP_PRIVATE_KEY`
+
+If you previously used `RP_APP_ID` / `RP_APP_PRIVATE_KEY`, rename them in **Settings → Secrets and variables → Actions** to the names above so the workflow can resolve them.
+
+GitHub App permissions should be limited to:
+
+- `Contents`: read and write
+- `Pull requests`: read and write
+- `Issues`: read and write
+
+If the repository uses protected tag or ref rulesets, allow the app identity to create `v*` tags and update the `release-please--branches--main` release branch.
+
 ## Commit Quality
 
 Prefer small, reviewable changes. If a change affects scoring, output contracts, or exit codes, call that out explicitly in the pull request description.
